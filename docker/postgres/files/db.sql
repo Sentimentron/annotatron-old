@@ -43,3 +43,9 @@ CREATE TABLE IF NOT EXISTS django_admin_log (
   content_type_id bigserial references django_content_type(id),
   user_id bigserial references auth_user(id)
 );
+
+CREATE TABLE IF NOT EXISTS an_blobs (
+  id bigserial primary key,
+  blob bytea NOT NULL,
+  date_inserted timestamptz DEFAULT 'now' NOT NULL
+);

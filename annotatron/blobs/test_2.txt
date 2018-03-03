@@ -1,0 +1,4 @@
+This is the second test file with some Japanese text to check for mangling.
+
+ウィキペディアへようこそ
+ウィキペディアは誰でも編集できるフリー百科事典です
