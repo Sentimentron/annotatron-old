@@ -1,0 +1,48 @@
+# Copyright 2018 Richard Townsend
+# Use of this source code is goverend by the license found in the LICENSE file.
+
+version: "3"
+services:
+
+  # Postgres database is the primary store for Annotatron
+  postgres-service:
+    image: postgres:9.6.8
+    container_name: AN_postgres
+    ports:
+      - 5432:5432
+    volumes:
+      # This file is executed on startup
+      # - ./postgres/files/db.sql:/docker-entrypoint-initdb.d/init-user-db.sql
+      - ./postgres/files/db.sql:/docker-entrypoint-startdb.d/init.sql
+      - ./state/var/lib/postgresql/data:/var/lib/postgresql/data
+      # Custom entrypoint to run database migrations
+      - ./postgres/entrypoint.sh:/docker-entrypoint.sh
+    environment:
+      POSTGRES_DB: annotatron
+      POSTGRES_USER: annotatron
+      POSTGRES_PASSWORD: annotatron
+
+  nginx-service:
+    image: nginx:1.13.9
+    container_name: AN_nginx
+    volumes:
+      - ./nginx/files/default:/etc/nginx/conf.d/default.conf
+      - ./nginx/files/proxy_params:/etc/nginx/proxy_params
+      - ./nginx/files/html:/usr/share/nginx/html
+      - ./../annotatron/annotatron/static:/usr/share/nginx/static-html
+    ports:
+      - 80:80
+    depends_on:
+      - annotatron-service
+
+  annotatron-service:
+    build:
+      context: annotatron
+    image: annotatron_image
+    container_name: AN_annotatron
+    volumes:
+      - ./../annotatron:/annotatron
+      - ./annotatron/entrypoint.sh:/entrypoint.sh
+    depends_on:
+      - postgres-service
+

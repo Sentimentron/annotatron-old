@@ -1,0 +1,27 @@
+# Copyright 2018 Richard Townsend (Sentimentron)
+# Use of this source code is governed by the LICENSE file.
+
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server ipv6only=on;
+
+  root /usr/share/nginx/html;
+  index index.html index.htm;
+
+  server_name localhost;
+  client_max_body_size 64m;
+
+  location / {
+    try_files $uri $uri/ = 404;
+  }
+
+  location /annotatron {
+    include proxy_params;
+    proxy_pass http://annotatron-service:4420;
+    proxy_set_header SCRIPT_NAME /annotatron;
+  }
+  location /annotatron/static {
+    autoindex on;
+    alias /usr/share/nginx/static-html;
+  }
+}
