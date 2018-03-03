@@ -1,0 +1,51 @@
+
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="row align-items-end">
+
+    <div class="col">
+        <h1>It's time to configure me.</h1>
+        <p>Annotatron couldn't find any super-users, so it's time to set one up.</p>
+    </div>
+
+    <div class="col">
+
+        {% if error_rejection %}
+            <div class="alert alert-danger" role="alert">
+                <b>Setup was unsuccessful:</b>
+                {{error_rejection}}
+            </div>
+        {% endif %}
+
+        {% if success %}
+            <div class="alert alert-success" role="alert">
+                Setup was successful! Click <a href="{% url 'home' %}">Click here to go home.</a>
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" class="form-control" name="username" id="username"/>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" class="form-control" name="password" id="password" />
+            </div>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" class="form-control" name="email" id="email" />
+            </div>
+            <p class="text-warning">Once the default user's been created, this screen will not be accessible.</p>
+            <p>All future users are created via the Django administration console.</p>
+            <button type="submit" class="btn btn-primary">Create Administrator</button>
+        </form>
+    </div>
+
+</div>
+
+{% endblock %}
+
