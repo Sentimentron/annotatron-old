@@ -27,6 +27,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+STATIC_ROOT = os.path.join(os.path.join(BASE_DIR, 'annotatron'), 'static')
+
 
 # Application definition
 
@@ -130,6 +132,6 @@ REST_FRAMEWORK = {
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
-STATIC_URL = 'annonatron/static/'
+STATIC_URL = '/annotatron/static/'
 
 

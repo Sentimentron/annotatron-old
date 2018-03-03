@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="row align-items-start">
+    <div class="col">
+    {% block left %}
+    {% endblock %}
+    </div>
+
+    <div class="col">
+        <div class="row">
+            <a href="Corpora">Corpora</a>
+        </div>
+        <div class="row">
+            <a href="Users">Users</a>
+        </div>
+        <div class="row">
+            <a href="admin/">Admin</a>
+        </div>
+         <div class="row">
+            <a href="{% url 'home' %}">Home</a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
