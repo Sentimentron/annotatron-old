@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'blobs',
     'control',
+    'corpora',
     'rest_framework'
 ]
 

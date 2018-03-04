@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from django.views.generic import TemplateView
-from django.http import HttpRequest
 from django.contrib.auth.models import User
 from rest_framework import generics, status, serializers
 from rest_framework.response import Response
@@ -57,14 +56,6 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = ('unique_id', 'kind', 'mime_type', 'content')
 
 
-class CorpusSerializer(serializers.ModelSerializer):
-    """
-        Used for converting, creating and updating corpora.
-    """
-    class Meta:
-        model = Corpus
-
-
 class AssetView(generics.ListCreateAPIView):
     """
         This is an API view which processes and handles assets.
@@ -92,14 +83,6 @@ class AssetView(generics.ListCreateAPIView):
                 "errors": serializer.errors
             }
             return Response(data, status=status.HTTP_400_BAD_REQUEST)
-
-
-class CorpusView(generics.ListCreateAPIView):
-    """
-        This view allows the programmatic creation of things.
-    """
-    queryset = Corpus.objects.all()
-    serializer_class = CorpusSerializer
 
 
 class DebugAssetView(APIView):
