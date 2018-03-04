@@ -1,14 +1,10 @@
 from django.shortcuts import render
 from django.views.generic import TemplateView
 from django.contrib.auth.models import User
-from rest_framework import generics, status, serializers
+from rest_framework import generics, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser
-
-import base64
-
-from .models import Asset, Corpus
 
 
 class DebugUserSerializer(serializers.Serializer):
@@ -31,70 +27,6 @@ class DebugUserSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
         raise NotImplementedError()
-
-
-class Base64Field(serializers.Field):
-    """
-        Decodes binary data held in a Base64 encoded string.
-    """
-    def to_representation(self, value):
-        return base64.standard_b64encode(value).decode("utf8")
-
-    def to_internal_value(self, data):
-        return base64.standard_b64decode(data)
-
-
-class AssetSerializer(serializers.ModelSerializer):
-    """
-        Converts an asset into something that can be safely handled.
-    """
-
-    content = Base64Field(source='binary_content')
-
-    class Meta:
-        model = Asset
-        fields = ('unique_id', 'kind', 'mime_type', 'content')
-
-
-class AssetView(generics.ListCreateAPIView):
-    """
-        This is an API view which processes and handles assets.
-    """
-    serializer_class = AssetSerializer
-
-    def get_queryset(self):
-        corpus_raw = self.request.query_params.get('corpus', None)
-        corpus = Corpus.objects.get(name=corpus_raw)
-        queryset = Corpus.objects.filter(corpus=corpus)
-        return queryset
-
-    def list(self, request):
-        queryset = self.get_queryset()
-        serializer = AssetSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def create(self, corpus, request):
-        serializer = AssetSerializer(request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({}, status=status.HTTP_201_CREATED)
-        else:
-            data = {
-                "errors": serializer.errors
-            }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST)
-
-
-class DebugAssetView(APIView):
-    """
-        This is a debug view (intended for use with unit testing) which
-        DELETES ALL OF THE ASSETS IN THE DATABASE.
-    """
-
-    def post(self, request):
-        assets = Asset.objects.all()
-        assets.delete()
-        return Response({})
 
 
 class DebugUserCreateView(generics.ListCreateAPIView):

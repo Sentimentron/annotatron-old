@@ -1,4 +1,4 @@
-from models import Corpus, User
+from models import Corpus, User, Asset, SkinnyAsset
 from utils import url
 
 import requests
@@ -38,6 +38,7 @@ class Annotatron:
         l = r.json()
         for item in l:
             c = Corpus.from_json(item)
+            c.server = self
             yield c
 
     def url(self, path) -> str:
@@ -58,7 +59,7 @@ class Annotatron:
         """
         Saves a Corpus into Annotatron
         :param corpus: The Corpus to save.
-        :return: Nothing, doesn't throw an exception if the op succeeds.
+        :return: The Corpus, as saved into the database
         """
 
         to_upload = corpus.to_json()
@@ -67,4 +68,48 @@ class Annotatron:
         if response.status_code != 201:
             print(response.text)
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        return self.get_corpus_by_name(corpus.name)
 
+    def add_asset_to_corpus(self, corpus: Corpus, asset: Asset):
+        """
+        Uploads a given Asset and inserts it into a parent Corpus.
+        :param corpus: The Corpus that this Asset will be a part of.
+        :param asset: The Asset itself.
+        :return: The same Asset.
+        """
+
+        to_upload = asset.to_json()
+        url = self.url("v1/corpora/{}/".format(corpus.name))
+        response = requests.post(url, json=to_upload, auth=self.auth)
+        if response.status_code != 201:
+            print(response.text)
+            raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        return asset
+
+    def retrieve_asset_content(self, corpus: Corpus, asset: Asset):
+        """
+        Returns the binary content of a given asset.
+        """
+        url = self.url("v1/corpora/{}/{}".format(corpus.name, asset.name))
+        response = requests.get(url, auth=self.auth)
+        if response.status_code != 200:
+            #print(response.status_code)
+            #print(response.text)
+            raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
+        return response.content
+
+
+    def list_assets_in_corpus(self, corpus: Corpus):
+        """
+        Retrieves all assets in a given corpus.
+        :param corpus: The corpus to query.
+        :return: A generator which yields all the Assets inside the corpus.
+        """
+        url = self.url("v1/corpora/{}/".format(corpus.name))
+        response = requests.get(url, auth=self.auth)
+        if response.status_code != 200:
+            #print(response.text)
+            raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
+        for item in response.json():
+            r1 = lambda a, c=corpus, provider=self: provider.retrieve_asset_content(c, a)
+            yield SkinnyAsset.from_json(r1, item)

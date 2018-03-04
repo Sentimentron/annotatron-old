@@ -24,10 +24,13 @@ urlpatterns = [
     url(r'^control/setup/faas', control.views.InitialSetupFaasView.as_view(), name='setup-faas'),
 
     url(r'^v1/corpora/$', corpora.views.CorpusView.as_view()),
+    url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/$', corpora.views.AssetContentView.as_view()),
+    url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/$', corpora.views.AssetView.as_view()),
 
     url(r'^v1/debug/hello', control.views.DebugSayHelloAPIView.as_view()),
     url(r'^v1/debug/users/$', control.views.DebugUserCreateView.as_view(), name='debug-user'),
     url(r'^v1/debug/users/remove', control.views.DebugUserDeleteView.as_view(), name='debug-user-delete'),
+    url(r'^v1/debug/assets/remove', corpora.views.DebugRemoveAssetsView.as_view(), name='debug-assets-delete'),
     url(r'^v1/debug/corpora/remove', corpora.views.DebugRemoveCorporaView.as_view(), name='debug-corpora-delete'),
 
     url(r'^$', control.views.IndexView.as_view(), name='home')
