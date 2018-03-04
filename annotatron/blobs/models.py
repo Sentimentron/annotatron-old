@@ -13,3 +13,10 @@ class Blob(models.Model):
         managed = False
         db_table = "an_blobs"
         app_label = "blobs"
+
+class Asset(models.Model):
+    """
+
+        An asset is something that can be displayed for annotation.
+
+    """
