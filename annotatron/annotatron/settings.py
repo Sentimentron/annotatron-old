@@ -53,7 +53,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'control.middleware.MissingSuperUserMiddleware'
+    'control.middleware.MissingSuperUserMiddleware',
+    'control.middleware.MissingFaasMiddleWare'
 ]
 
 ROOT_URLCONF = 'annotatron.urls'
@@ -139,3 +140,5 @@ STATIC_URL = '/annotatron/static/'
 CUSTOM_STORAGE_OPTIONS = {}
 
 TEST_RUNNER='annotatron.utils.UnManagedModelTestRunner'
+
+OPENFAAS_URL = os.getenv("AN_OPENFAAS_URL")

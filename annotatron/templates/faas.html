@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="row align-items-end">
+
+    <div class="col">
+        <h1>Just one more thing...</h1>
+        <p><i>annotatron</i> couldn't find an OpenFaaS connection set up, we need one to continue.</p>
+    </div>
+
+    <div class="col">
+
+        <p>To configure this, open <code>annotatron/settings.py</code> and add a line like this:</p>
+        <pre>
+            OPENFAAS_URL = "http://localhost:8080/"
+        </pre>
+        <p>Then, restart the annotatron core with <code>docker-compose</code></p>
+        <pre>
+            docker-compose restart annotatron-service
+        </pre>
+        <p>Or, pass <code>AN_OPENFAAS_URL</code> in the environment when you do <code>docker-compose up</code>.</p>
+        <p>For more information about configuring OpenFaaS, see the Wiki on Github.</p>
+
+    </div>
+
+{% endblock %}

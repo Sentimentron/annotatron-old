@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 
 
 # Create your views here.
-class InitialSetupView(TemplateView):
+class InitialSetupUserView(TemplateView):
     template_name = "initial.html"
 
     def get(self, request):
@@ -39,6 +39,10 @@ class InitialSetupView(TemplateView):
 
         if super_users.count() > 0:
             return render(request, 'initial.html', {'success': True})
+
+
+class InitialSetupFaasView(TemplateView):
+    template_name = 'faas.html'
 
 
 class IndexView(TemplateView):

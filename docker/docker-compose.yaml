@@ -45,4 +45,5 @@ services:
       - ./annotatron/entrypoint.sh:/entrypoint.sh
     depends_on:
       - postgres-service
-
+    environment:
+      AN_OPENFAAS_URL: ${AN_OPENFAAS_URL}

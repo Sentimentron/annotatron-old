@@ -19,6 +19,7 @@ import control.views
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
-    url(r'^control/setup', control.views.InitialSetupView.as_view(), name='control-setup'),
+    url(r'^control/setup/user', control.views.InitialSetupUserView.as_view(), name='setup-user'),
+    url(r'^control/setup/faas', control.views.InitialSetupFaasView.as_view(), name='setup-faas'),
     url(r'^$', control.views.IndexView.as_view(), name='home')
 ]
