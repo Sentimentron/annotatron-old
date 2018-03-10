@@ -191,3 +191,126 @@ class Corpus:
         dict = copy.deepcopy(dict)
         dict.pop('id', None)
         return Corpus(**dict)
+
+
+class QuestionPlaceHolder:
+    """
+        This is a class which can be converted into a proper question by Annotatron.
+    """
+    def __init__(self, summary_code):
+        self.summary_code = summary_code
+
+    def to_json(self) -> str:
+        return self.summary_code
+
+    @classmethod
+    def from_json(cls, summary):
+        return QuestionPlaceHolder(summary)
+
+
+class QuestionDefaultAnswerSource:
+    """
+        This is a class which describes where a Question should get a default property or
+        predefined answer from.
+    """
+    def __init__(self, default_answer=None):
+        self.default_answer = default_answer
+        pass
+
+    def to_json(self) -> dict:
+        """
+        Converts this object into an API-ready input.
+        """
+        if self.default_answer:
+            return {
+                "default": self.default_answer
+            }
+        else:
+            return {}
+
+    @classmethod
+    def from_json(cls, dict):
+        return cls(**dict)
+
+
+class QuestionDefaultFromOtherQuestion(QuestionDefaultAnswerSource):
+    """
+        This is a class which indicates that a Question should get a default property from
+        a user's previous input on another question.
+    """
+    def __init__(self, previous_question: QuestionPlaceHolder, best_known=False, reference=False):
+        """
+        Specifies that the Question's state should be pre-populated from the answer to another Question.
+        :param previous_question: The previous Question's summary code.
+        :param best_known: Whether the answer should be taken as an aggregation of best known results.
+                          e.g. "What are the words spoken within each segment of the above file?"
+        :param reference: Whether the answer should be taken from a known-good (or reference) result if possible.
+                          e.g. "Is this transcription accurate?"
+
+                          If this and best_known are both True, then reference will win if it's available.
+        """
+        super().__init__(None)
+        self.previous_question = previous_question
+        self.reference = reference
+        self.best_known = best_known
+
+    def to_json(self) -> dict:
+        """
+        Converts this object into an API-ready input.
+        """
+        ret = {
+            "question": self.previous_question.to_json(),
+            "best_known": self.best_known,
+            "reference": self.reference
+        }
+        return ret
+
+    @classmethod
+    def from_json(cls, d):
+        d = copy.deepcopy(d)
+        d["question"] = QuestionPlaceHolder.from_json()
+        return cls(**d)
+
+
+class Question:
+    """
+        A Question is a task that a User must provide an answer for, it's attached to an Asset.
+        Different Assets inside a Corpora can have different questions depending on what they are.
+    """
+    def __init__(self, summary_code, question_text, question_kind,
+                 default_answer : QuestionDefaultAnswerSource = None):
+        """
+        Creates a new Question object.
+        :param summary_code: When the "best known annotation" method is called, the method will be provided with a dict
+                             like the following:
+                             {
+                                "summary_code": [user_annotation_1, user_annotation_2]
+                             }
+                             Changing this is what makes the Question separable from other questions.
+        :param question_text: This is the human-readable text that can will be entered.
+        :param question_kind: This describes the format of the question, e.g. 'segmentation'
+                              Not all combinations of question_kind and Asset are supported
+                              (see :check_for_problems:).
+        :param default_answer: Describes some state that can initialize a question.
+        """
+        self.code = summary_code
+        self.text = question_text
+        self.kind = question_kind
+        self.default = default_answer
+
+    def to_json(self) -> dict:
+        return {
+            "summary_code": self.code,
+            "question_text": self.text,
+            "question_kind": self.kind,
+            "default_answer": self.default.to_json()
+        }
+
+    @classmethod
+    def from_json(cls, d):
+        d = copy.deepcopy(d)
+        if "default" in d["default_answer"].keys():
+            d["default_answer"] = QuestionDefaultAnswerSource.from_json(d["default_answer"])
+        else:
+            d["default_answer"] = QuestionDefaultFromOtherQuestion.from_json(d["default_answer"])
+        return Question(**d)

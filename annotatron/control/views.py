@@ -57,6 +57,7 @@ class DebugSayHelloAPIView(APIView):
         Used to check that authentication is working.
     """
     permission_classes = (IsAdminUser,)
+
     def post(self, request):
         return Response({"hello": "world"})
 
