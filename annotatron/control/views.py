@@ -1,10 +1,39 @@
 from django.shortcuts import render
 from django.views.generic import TemplateView
 from django.contrib.auth.models import User
-from rest_framework import generics, serializers
+from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, AllowAny
+
+
+class RequiresSetupView(APIView):
+    """
+    This API is called by the front-end code to determine if we need
+    to go through initial configuration.
+    """
+
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        superusers = User.objects.filter(is_superuser=True)
+        return Response({
+            "requires_setup": superusers.count() == 0
+        })
+
+    def post(self, request):
+        allowed = User.objects.filter(is_superuser=True).count() == 0
+        if allowed:
+            serializer = DebugUserSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.create()
+                return Response(status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "errors": serializer.errors(),
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        else:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
 
 
 class DebugUserSerializer(serializers.Serializer):

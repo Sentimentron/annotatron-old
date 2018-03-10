@@ -1,5 +1,6 @@
 django==2.0.2
 djangorestframework==3.7.7
+django-rest-auth
 markdown
 django-filter
 psycopg2

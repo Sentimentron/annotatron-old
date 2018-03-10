@@ -4,6 +4,18 @@ import base64
 import os
 import mimetypes
 
+class ConfigurationResponse:
+    """
+        Contains information about whether Annotatron's ready to use, or whether it requires
+        further information.
+    """
+
+    def __init__(self, requires_setup:bool):
+        self.requires_setup = requires_setup
+
+    @classmethod
+    def from_json(cls, json):
+        return ConfigurationResponse(**json)
 
 class User:
     """
