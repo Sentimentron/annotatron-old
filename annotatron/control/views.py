@@ -26,14 +26,24 @@ class RequiresSetupView(APIView):
         if allowed:
             serializer = DebugUserSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.create()
+                serializer.create(serializer.validated_data)
                 return Response(status=status.HTTP_201_CREATED)
             else:
                 return Response({
-                    "errors": serializer.errors(),
+                    "errors": serializer.errors,
                 }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
         else:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+
+class CheckAuthenticationView(APIView):
+    """
+        Returns the current username, just to check that we're logged in.
+    """
+    def get(self, request):
+        return Response({"username": request.user.username,
+                         "is_staff": request.user.is_staff,
+                         "is_superuser": request.user.is_superuser})
 
 
 class DebugUserSerializer(serializers.Serializer):

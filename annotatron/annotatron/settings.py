@@ -26,7 +26,7 @@ SECRET_KEY = '&9!-0bf+e7&hqq-5s#c&6es5h@ux-@_hb2$eo-*57i()^odgvs'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]', '192.168.1.68']
 
 STATIC_ROOT = os.path.join(os.path.join(BASE_DIR, 'annotatron'), 'static')
 
@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     'corpora',
     'rest_framework',
     'rest_framework.authtoken',
-    'rest_auth'
 ]
 
 MIDDLEWARE = [
@@ -56,8 +55,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'control.middleware.MissingSuperUserMiddleware',
-    'control.middleware.MissingFaasMiddleWare',
     'control.middleware.DisableCSRFForDRFMiddleWare'
 ]
 
@@ -122,7 +119,9 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-    )
+        'rest_framework.authentication.TokenAuthentication',
+    ),
+    'DATETIME_FORMAT': '%Y-%m-%dT%H:%M:%S.%fZ'
 }
 
 
@@ -140,11 +139,6 @@ USE_L10N = True
 USE_TZ = True
 
 DATETIME_FORMAT = 'Y-m-d H:i:s e'
-
-REST_FRAMEWORK = {
-    'DATETIME_FORMAT': '%Y-%m-%dT%H:%M:%S.%fZ'
-}
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.10/howto/static-files/

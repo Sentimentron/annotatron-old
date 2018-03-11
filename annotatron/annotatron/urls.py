@@ -15,6 +15,7 @@ Including another URLconf
 """
 from django.conf.urls import url, include
 from django.contrib import admin
+from rest_framework.authtoken.views import obtain_auth_token
 import control.views
 import corpora.views
 
@@ -23,7 +24,10 @@ urlpatterns = [
     url(r'^control/setup/user', control.views.InitialSetupUserView.as_view(), name='setup-user'),
     url(r'^control/setup/faas', control.views.InitialSetupFaasView.as_view(), name='setup-faas'),
 
+    url(r'^v1/auth/token', obtain_auth_token),
+
     url(r'^v1/control/setup', control.views.RequiresSetupView.as_view(), name='v1-setup-required'),
+    url(r'^v1/control/user', control.views.CheckAuthenticationView.as_view()),
 
     url(r'^v1/corpora/$', corpora.views.CorpusView.as_view()),
     url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/$', corpora.views.AssetContentView.as_view()),
@@ -35,7 +39,6 @@ urlpatterns = [
     url(r'^v1/debug/assets/remove', corpora.views.DebugRemoveAssetsView.as_view(), name='debug-assets-delete'),
     url(r'^v1/debug/corpora/remove', corpora.views.DebugRemoveCorporaView.as_view(), name='debug-corpora-delete'),
 
-    url(r'^v1/auth', include('rest_auth.urls')),
 
     url(r'^$', control.views.IndexView.as_view(), name='home')
 ]
