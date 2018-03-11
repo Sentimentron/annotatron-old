@@ -5,14 +5,20 @@
       <router-link :to="{}">
         <img src="../assets/logo.svg" alt="Annotatron"/>
       </router-link>
-      <router-link :to="{'name': 'collect'}" class="header-navigation">
-        Collect
-      </router-link>
+      <span v-if="isAuthenticated">
+        <router-link :to="{'name': 'collect'}" class="header-navigation">
+          Collect
+        </router-link>
+      </span>
+      <span v-if="authenticationStatus === 'notAuthenticated'"><button
+        v-on:click="$router.push({path: '/login', params: {'authenticationBus': this.bus}})">Log In</button></span>
+      <span
+        v-if="authenticationStatus !== 'notAuthenticated'"><button v-on:click="signOut()">Sign Out</button></span>
     </div>
     <div class="hello">
       <router-view></router-view>
     </div>
-    <div class="hello">
+    <div class="hello" style="display:none">
       <h1>{{ msg }}</h1>
       <h2>Essential Links and stuff</h2>
       <ul>
@@ -99,20 +105,45 @@
 
 <script>
   import HTTP from '../http-common';
+  import EventBus from '../global-bus';
 
   export default {
-  name: 'HelloWorld',
+  name: 'Header',
   data() {
     return {
       msg: 'Welcome to Your Vue.js App',
+      authenticationStatus: '',
     };
   },
+
+  signOut() {
+    EventBus.$emit("authenticationChanged", {authenticated: 'notAuthenticated'});
+    alert("Signed out");
+  },
+
+  methods: {
+    signOut() {
+      EventBus.$emit("authenticationChanged", {authenticated: 'notAuthenticated'});
+      localStorage.clear();
+      this.$router.push('/login');
+    }
+  },
+
   mounted() {
+    // Make sure that we show the right sign-in, sign-out buttons.
+    EventBus.$on('authenticationChanged', (data) => {
+      this.authenticationStatus = data.authenticated;
+    });
+
     HTTP.get('v1/control/setup').then((response) => {
       if (response.data.requires_setup) {
-        this.$router.push( {name: 'InitialSetup'} );
+        this.bus.$emit('AuthenticationChange', { authenticated: 'notAuthenticated' });
+        this.$router.push( { name: 'InitialSetup' } );
       } else if (!HTTP.isAuthenticated) {
-        this.$router.push( {name: 'Login'} );
+        const token = localStorage.getItem('Token');
+        HTTP.defaults.headers.common.Authorization = 'Token ' + token;
+        alert("Confirmed");
+        this.bus.$emit('AuthenticationChange', { authenticated: 'notConfirmed' });
       }
     }).catch((error) => {
       alert('Something went wrong...');

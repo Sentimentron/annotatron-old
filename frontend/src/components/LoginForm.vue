@@ -20,9 +20,10 @@
 
 <script>
   import HTTP from '../http-common';
+  import EventBus from '../global-bus';
 
   export default {
-  name: 'initial-setup',
+  name: 'login-form',
   data() {
     return {
       username: '',
@@ -32,6 +33,12 @@
       state: 'normal',
     };
   },
+  props: {
+    authenticationBus: {
+      required: true,
+      default: null,
+    },
+  },
   methods: {
 
     login() {
@@ -39,6 +46,7 @@
         // Called if authentication is successful
         const token = response.data.token;
 
+        localStorage.setItem('Token', token);
         HTTP.defaults.headers.common['Authorization'] = "Token " + token;
         this.$Progress.set(70);
 
@@ -48,7 +56,8 @@
             this.$Progress.finish();
             this.promptText = 'Welcome.';
             this.state = 'success';
-            // TODO: redirect
+            EventBus.$emit('authenticationChanged', { authenticated: 'confirmed' });
+            this.$router.push({ name: 'Welcome', params: { userData: response.data } });
           } else {
             this.$Progress.fail();
             this.promptText = 'Security error.';
@@ -108,6 +117,8 @@
         } else {
           failure(error);
         }
+      }).finally( () => {
+        this.password = '';
       });
     },
 

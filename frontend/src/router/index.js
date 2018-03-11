@@ -3,6 +3,7 @@ import Router from 'vue-router';
 import Header from '@/components/Header';
 import InitialSetupForm from '@/components/InitialSetupForm';
 import LoginForm from '@/components/LoginForm';
+import AuthenticatedWelcome from '@/components/AuthenticatedWelcome';
 
 Vue.use(Router);
 
@@ -19,7 +20,11 @@ export default new Router({
       }, {
         path: '/login',
         name: 'Login',
-        component: LoginForm
+        component: LoginForm,
+      }, {
+        path: '/welcome',
+        name: 'Welcome',
+        component: AuthenticatedWelcome,
       }],
       meta: {
         progress: {

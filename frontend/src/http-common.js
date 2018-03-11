@@ -3,8 +3,13 @@ import axios from 'axios';
 
 const HTTP = axios.create({
   baseURL: `/annotatron`,
-  isAuthenticated: false,
 });
+
+HTTP.isAuthenticated = () => {
+  const token = localStorage.getItem("Token");
+  if (!token) return false;
+  return true;
+};
 
 HTTP.setAuthentication = (token) => {
   HTTP.isAuthenticated = true;
