@@ -1,8 +1,8 @@
 import Vue from 'vue';
 import Router from 'vue-router';
 import Header from '@/components/Header';
-import InitialSetup from '@/components/InitialSetup';
-
+import InitialSetupForm from '@/components/InitialSetupForm';
+import LoginForm from '@/components/LoginForm';
 
 Vue.use(Router);
 
@@ -15,7 +15,11 @@ export default new Router({
       children: [{
         path: '/setup',
         name: 'InitialSetup',
-        component: InitialSetup,
+        component: InitialSetupForm,
+      }, {
+        path: '/login',
+        name: 'Login',
+        component: LoginForm
       }],
       meta: {
         progress: {

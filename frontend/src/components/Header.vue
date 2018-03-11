@@ -101,23 +101,25 @@
   import HTTP from '../http-common';
 
   export default {
-    name: 'HelloWorld',
-    data() {
-      return {
-        msg: 'Welcome to Your Vue.js App',
-      };
-    },
-    mounted() {
-      HTTP.get('v1/control/setup').then((response) => {
-        if (response.data.requires_setup) {
-          this.$router.push({name: 'InitialSetup'});
-        }
-      }).catch((error) => {
-        alert("Something went wrong...")
-        console.log(error);
-      });
-    },
-  };
+  name: 'HelloWorld',
+  data() {
+    return {
+      msg: 'Welcome to Your Vue.js App',
+    };
+  },
+  mounted() {
+    HTTP.get('v1/control/setup').then((response) => {
+      if (response.data.requires_setup) {
+        this.$router.push( {name: 'InitialSetup'} );
+      } else if (!HTTP.isAuthenticated) {
+        this.$router.push( {name: 'Login'} );
+      }
+    }).catch((error) => {
+      alert('Something went wrong...');
+      console.log(error);
+    });
+  },
+};
 </script>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->

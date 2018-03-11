@@ -25,61 +25,68 @@
   import HTTP from '../http-common';
 
   export default {
-    name: 'initial-setup',
-    data() {
-      return {
-        username: '',
-        password: '',
-        email: '',
-        promptText: 'If you forget this password, you\'ll need to recover Annotatron.',
-        state: 'normal',
+  name: 'initial-setup',
+  data() {
+    return {
+      username: '',
+      password: '',
+      email: '',
+      promptText: 'If you forget this password, you\'ll need to recover Annotatron.',
+      state: 'normal',
+    };
+  },
+  methods: {
+    createDefaultUser() {
+      const success = (response) => {
+        this.promptText = 'Welcome.';
+        this.state = 'success';
+        const redirectToLogin = () => {
+          this.$router.push('login');
+        };
+        setTimeout(redirectToLogin, 1500);
       };
-    },
-    methods: {
-      createDefaultUser() {
-        const success = (response) => {
-          this.promptText = 'Welcome.';
-          this.state = 'success';
-          const redirectToLogin = () => {
-            this.$router.push({name: 'home'});
-          };
-          setTimeout(redirectToLogin, 1500);
-        };
 
-        const failure = (response) => {
-          this.state = 'error';
-          this.promptText = 'Something went wrong';
-          console.log(response);
-        };
+      const failure = (response) => {
+        this.state = 'error';
+        this.promptText = 'Something went wrong';
+        console.log(response);
+      };
 
-        const warning = (err) => {
-          const error = err.response.data;
-          alert(JSON.stringify(error["errors"]));
-          for (let key in error["errors"]) {
-            this.promptText = key + ": " + error["errors"][key];
+      const warning = (err) => {
+        const error = err.response.data;
+        for (const key in error.errors.keys()) {
+          if (key) {
+            const problem = error.errors[key];
+            this.promptText = `${key}: ${problem}`;
           }
-          this.state = 'warning';
-        };
+        }
+        this.state = 'warning';
+      };
 
-        HTTP.post('v1/control/setup', {
-          username: this.username,
-          password: this.password,
-          email: this.email,
-          is_superuser: true,
-          is_staff: true,
-        }).then((response) => {
-          success(response);
-        }).catch((error) => {
-          console.log(JSON.stringify(error));
-          if (error.response.status === 422) {
-            warning(error);
-          } else {
-            failure(error);
-          }
-        });
-      },
+      this.$Progress.start();
+
+      HTTP.post('v1/control/setup', {
+        username: this.username,
+        password: this.password,
+        email: this.email,
+        is_superuser: true,
+        is_staff: true,
+      }).then((response) => {
+        success(response);
+        this.$Progress.finish();
+      }).catch((error) => {
+        console.log(JSON.stringify(error));
+        this.$Progress.fail();
+        if (error.response.status === 422) {
+          warning(error);
+        } else {
+          failure(error);
+        }
+        this.$Progress.fail();
+      });
     },
-  };
+  },
+};
 
 </script>
 

@@ -8,15 +8,15 @@ import router from './router';
 
 const options = {
   color: '#bffaf3',
-  failedColor: '#874b4b',
-  thickness: '5px',
+  failedColor: 'red',
+  thickness: '2px',
   transition: {
-    speed: '0.2s',
-    opacity: '0.6s',
+    speed: '1.2s',
+    opacity: '0.3s',
     termination: 300,
   },
   autoRevert: true,
-  location: 'left',
+  location: 'top',
   inverse: false,
 };
 
@@ -28,6 +28,6 @@ Vue.config.productionTip = false;
 new Vue({
   el: '#app',
   router,
-  components: {App},
+  components: { App },
   template: '<App/>',
 });
