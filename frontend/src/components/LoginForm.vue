@@ -56,7 +56,13 @@
             this.$Progress.finish();
             this.promptText = 'Welcome.';
             this.state = 'success';
-            EventBus.$emit('authenticationChanged', { authenticated: 'confirmed' });
+            if (response.data.is_superuser) {
+              EventBus.$emit('authenticationChanged', { authenticated: 'admin' });
+            } else if (response.data.is_staff) {
+              EventBus.$emit('authenticationChanged', { authenticated: 'staff' });
+            } else {
+              EventBus.$emit('authenticationChanged', { authenticated: 'annotator' });
+            }
             this.$router.push({ name: 'Welcome', params: { userData: response.data } });
           } else {
             this.$Progress.fail();

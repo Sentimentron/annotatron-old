@@ -5,9 +5,24 @@
       <router-link :to="{}">
         <img src="../assets/logo.svg" alt="Annotatron"/>
       </router-link>
-      <span v-if="isAuthenticated">
+      <span v-if="authenticationStatus === 'admin'">
         <router-link :to="{'name': 'collect'}" class="header-navigation">
           Collect
+        </router-link>
+      </span>
+      <span v-if="authenticationStatus !== 'notAuthenticated'">
+        <router-link :to="{'name': 'collect'}" class="header-navigation">
+          Annotate
+        </router-link>
+      </span>
+      <span v-if="authenticationStatus === 'admin'">
+        <router-link :to="{'name': 'collect'}" class="header-navigation">
+          Process
+        </router-link>
+      </span>
+      <span v-if="authenticationStatus === 'admin'">
+        <router-link :to="{'name': 'export'}" class="header-navigation">
+          Export
         </router-link>
       </span>
       <span v-if="authenticationStatus === 'notAuthenticated'"><button
@@ -138,12 +153,23 @@
     HTTP.get('v1/control/setup').then((response) => {
       if (response.data.requires_setup) {
         this.bus.$emit('AuthenticationChange', { authenticated: 'notAuthenticated' });
-        this.$router.push( { name: 'InitialSetup' } );
-      } else if (!HTTP.isAuthenticated) {
+        this.$router.push({ name: 'InitialSetup' });
+      } else {
         const token = localStorage.getItem('Token');
         HTTP.defaults.headers.common.Authorization = 'Token ' + token;
-        alert("Confirmed");
-        this.bus.$emit('AuthenticationChange', { authenticated: 'notConfirmed' });
+        EventBus.$emit('AuthenticationChange', { authenticated: 'notConfirmed' });
+        HTTP.get('v1/control/user').then( (innerResponse) => {
+          if (innerResponse.data.is_superuser) {
+            EventBus.$emit('authenticationChanged', { authenticated: 'admin' });
+          } else if (innerResponse.data.is_staff) {
+            EventBus.$emit('authenticationChanged', { authenticated: 'staff' });
+          } else {
+            EventBus.$emit('authenticationChanged', { authenticated: 'annotator' });
+          }
+        }).catch( (error) => {
+          alert("Something went wrong.");
+          console.log(error);
+        });
       }
     }).catch((error) => {
       alert('Something went wrong...');
@@ -164,6 +190,7 @@
     text-align: left;
     flex-direction: row;
     justify-content: center;
+    height: 51px;
   }
 
   .header-img {
