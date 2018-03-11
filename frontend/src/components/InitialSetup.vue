@@ -59,8 +59,6 @@
             this.promptText = key + ": " + error["errors"][key];
           }
           this.state = 'warning';
-          //this.promptText = error[0] + ':' + error[0][0];
-          //alert("hi")
         };
 
         HTTP.post('v1/control/setup', {
@@ -73,7 +71,6 @@
           success(response);
         }).catch((error) => {
           console.log(JSON.stringify(error));
-          //alert(error.response.status);
           if (error.response.status === 422) {
             warning(error);
           } else {
@@ -140,25 +137,12 @@
   }
 
   button {
-    /* Rectangle 3: */
     background-image: radial-gradient(50% 196%, #06B06D 50%, #04A163 100%);
     border-radius: 10px;
     padding: 15px;
     color: white;
     font-size: 20px;
     display: flex;
-  }
-
-  .error {
-    color: red;
-  }
-
-  .success {
-    color: #04A163;
-  }
-
-  .warning {
-    color: orange;
   }
 
 </style>

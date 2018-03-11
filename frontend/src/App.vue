@@ -43,10 +43,21 @@
     -moz-osx-font-smoothing: grayscale;
     text-align: center;
     color: #2c3e50;
-    /* Rectangle: */
   }
 
   body {
     margin: 0px;
+  }
+
+  .error {
+    color: red;
+  }
+
+  .success {
+    color: #04A163;
+  }
+
+  .warning {
+    color: orange;
   }
 </style>
