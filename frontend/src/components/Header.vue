@@ -117,16 +117,16 @@
   },
 
   signOut() {
-    EventBus.$emit("authenticationChanged", {authenticated: 'notAuthenticated'});
-    alert("Signed out");
+    EventBus.$emit('authenticationChanged', {authenticated: 'notAuthenticated'});
+    alert('Signed out');
   },
 
   methods: {
     signOut() {
-      EventBus.$emit("authenticationChanged", {authenticated: 'notAuthenticated'});
+      EventBus.$emit('authenticationChanged', {authenticated: 'notAuthenticated'});
       localStorage.clear();
       this.$router.push('/login');
-    }
+    },
   },
 
   mounted() {
