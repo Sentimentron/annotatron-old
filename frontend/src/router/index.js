@@ -4,6 +4,8 @@ import Header from '@/components/Header';
 import InitialSetupForm from '@/components/InitialSetupForm';
 import LoginForm from '@/components/LoginForm';
 import AuthenticatedWelcome from '@/components/AuthenticatedWelcome';
+import CorporaView from '@/components/CorporaView';
+import NewCorporaForm from '@/components/NewCorporaForm';
 
 Vue.use(Router);
 
@@ -25,6 +27,15 @@ export default new Router({
         path: '/welcome',
         name: 'Welcome',
         component: AuthenticatedWelcome,
+      }, {
+        path: '/corpora',
+        name: 'Corpora',
+        component: CorporaView,
+        children: [{
+          path: 'add',
+          name: 'AddCorpora',
+          component: NewCorporaForm,
+        }],
       }],
       meta: {
         progress: {

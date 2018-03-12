@@ -6,7 +6,7 @@
         <img src="../assets/logo.svg" alt="Annotatron"/>
       </router-link>
       <span v-if="authenticationStatus === 'admin'">
-        <router-link :to="{'name': 'collect'}" class="header-navigation">
+        <router-link :to="{'name': 'Corpora'}" class="header-navigation">
           Collect
         </router-link>
       </span>
