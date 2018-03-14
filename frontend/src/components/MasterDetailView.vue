@@ -5,16 +5,18 @@
       <div class="control">
         <router-link class="control-link" :to="{'name': this.addAction}">+</router-link>
       </div>
-      <div class="item selected">Hi</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
-      <div class="item">World</div>
+      <div class="no-items" v-if="items.length === 0">
+        <p>There are no items to display.</p>
+      </div>
+      <div class="item" v-for="entry in items">
+        <router-link v-if="entry._leftText != this.selected" class="item-link" :class="{ selected: entry._leftText ==
+        this.selected }"
+                     :to="{'name': entry._rightNavName, 'props': entry._rightNavProps}">{{entry
+          ._leftText}}</router-link>
+        <router-link v-if="entry._leftText == this.selected" class="item-link selected"
+                     :to="{'name': entry._rightNavName, 'props': entry._rightNavProps}">{{entry
+          ._leftText}}</router-link>
+      </div>
     </div>
     <div class="detail-column">
       <router-view></router-view>
@@ -24,19 +26,32 @@
 </template>
 
 <script>
+export class MasterDetailViewItem {
+  constructor(leftText, rightNavName, rightNavProperties) {
+    this._leftText = leftText;
+    this._rightNavName = rightNavName;
+    this._rightNavProps = rightNavProperties;
+  }
+};
+
 export default {
   name: "master-detail-view",
   props: {
     items: {
-      type: Object,
+      type: Array,
       default: function() {
-
+        return []
       }
     },
     addAction: {
       type: String,
       default: "Add"
     },
+  },
+  computed: {
+    _numItems: function() {
+      return this.items.length()
+    }
   },
   methods: {
     goToAdd: () => {
@@ -78,6 +93,14 @@ export default {
     padding-top: 10px;
     display: flex;
     flex-direction: column;
+    color: white;
+  }
+
+  .no-items {
+    font-size: 12px;
+    text-align: center;
+    margin-top: 5px;
+    border-top: 1px solid white;
   }
 
   .item {
