@@ -4,14 +4,10 @@ from django.db import models
 # Create your models here.
 class Corpus(models.Model):
     """
-    A Corpus is a collection of Assets
+        A Corpus is a collection of Assets.
     """
     name = models.TextField(unique=True, null=False)
-    description = models.TextField()
-    # This question generator field consists of Python which is piped
-    # through an OpenFAAS service to generate Question objects attached to
-    # this corpora's assets.
-    question_generator = models.TextField()
+    description = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -20,6 +16,9 @@ class Corpus(models.Model):
 
 
 class Asset(models.Model):
+    """
+        An Asset is an indivisable binary blob which can be annotated.
+    """
 
     name = models.TextField(unique=True, null=False)
     kind = models.TextField(null=False)
