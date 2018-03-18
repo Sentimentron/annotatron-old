@@ -1,3 +1,4 @@
+python3 manage.py wait_for_db 500
 python3 manage.py collectstatic --noinput
 python3 manage.py migrate
 
