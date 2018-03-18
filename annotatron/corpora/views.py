@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser
 
-from .models import Corpus, Asset
+from .models import Corpus, Asset, Annotation
 
 
 class CorpusSerializer(serializers.ModelSerializer):
@@ -28,6 +28,16 @@ class CorpusSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("name: should only consist of alpha-numeric letters, underscores, "
                                               "and dashes (got: '{}')".format(value))
         return value
+
+
+class AnnotationSerializer(serializers.ModelSerializer):
+    """
+        Used for creating new Annotations.
+    """
+
+    class Meta:
+        model = Annotation
+        fields = "__all__"
 
 
 class CorpusView(generics.ListCreateAPIView):
@@ -145,6 +155,26 @@ class AssetContentView(APIView):
 
         return HttpResponse(object.binary_content, content_type=object.mime_type)
         #return Response(object.binary_content, content_type=object.mime_type)
+
+
+class AnnotationCreateListView(APIView):
+    """
+        This view returns a list of active annotations, or creates a new one.
+    """
+
+    def post(self, request, corpus, asset):
+        corpus = Corpus.objects(name=corpus)
+        asset = Annotation.objects.filter(corpus=corpus).get(name=asset)
+        request.data["asset"] = asset.id
+        serializer = AnnotationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({}, status=status.HTTP_201_CREATED)
+        else:
+            data = {
+                "errors": serializer.errors
+            }
+            return Response(data, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 class DebugRemoveAssetsView(APIView):

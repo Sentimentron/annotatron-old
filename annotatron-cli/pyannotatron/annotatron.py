@@ -1,6 +1,6 @@
 import logging
 
-from .models import Corpus, User, Asset, SkinnyAsset
+from .models import Corpus, User, Asset, SkinnyAsset, Annotation
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -115,6 +115,44 @@ class Annotatron:
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
         asset.corpus = corpus
         return asset
+
+    def add_annotation_to_corpus(self, annotation: Annotation) -> Annotation:
+        """
+        Uploads a given Annotation into a Corpus, attached to an Asset.
+        :param annotation: The Annotation to upload, with the :asset: field filled in.
+        :return: The same Annotation.
+        """
+        to_upload = asset.to_json()
+        url = self.url("v1/corpora/{}/{}/annotations".format(annotation.corpus.name, annotation.asset.name))
+        response = requests.post(url, json=to_upload, auth=self.auth)
+        if response.status_code != 201:
+            logging.error("to_upload:%s, response.text:%s", to_upload, response.text)
+            raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        return annotation
+
+    def retrieve_asset_annotations(self, corpus: Corpus, asset: Asset):
+        """
+        Returns an overview of all the Annotations on a given object.
+        :param corpus: The Corpus the Asset lives in.
+        :param asset: The Asset whose annotations to retrieve.
+        :return: A dict consisting of {summary_code => kind => [annotations]}
+        """
+        url = self.url("v1/corpora/{}/{}/annotations".format(corpus.name, asset.name))
+        response = requests.get(url, auth=self.auth)
+        ret = {}
+        if response.status_code == 200:
+            js = response.json()
+            for summary_code in js:
+                ret[summary_code] = {}
+                for kind in ret[summary_code]:
+                    ret[summary_code][kind] = []
+                    for entry in ret[summary_code][kind]:
+                        a = Annotation.from_json(entry)
+                        ret[summary_code][kind] = a
+            return ret
+        else:
+            logging.error("response.text:%s", response.text)
+            raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
 
     def retrieve_asset_content(self, corpus: Corpus, asset: Asset):
         """

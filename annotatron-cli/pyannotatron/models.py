@@ -21,6 +21,7 @@ class ConfigurationResponse:
     def from_json(cls, json):
         return ConfigurationResponse(**json)
 
+
 class Corpus:
     """
         Represents Annotatron's concept of a corpus, which is a collection of Assets.
@@ -48,6 +49,7 @@ class Corpus:
         dict = copy.deepcopy(dict)
         dict.pop('id', None)
         return Corpus(**dict)
+
 
 class User:
     """
@@ -297,7 +299,7 @@ class Annotation:
         to a question.
     """
 
-    def __init__(self, asset: Asset, summary_code: str, data: object, kind: str, source: str):
+    def __init__(self, asset: Asset, summary_code: str, data: object, kind: str, source: str, metadata: object):
         """
         Create an Annotation object, which tells us something about an Asset.
         :param asset: The Asset we're annotating.
@@ -305,6 +307,7 @@ class Annotation:
         :param data: JSON-serializable data that comprises the annotation.
         :param kind: e.g. "text", "segmentation_1d", "range_1d" etc.
         :param source: Either "reference" or "human"
+        :param metadata: Anything that's not directly related to the annotation's data (JSON-serializable).
         """
 
         self.asset = asset
@@ -312,6 +315,7 @@ class Annotation:
         self.data = data
         self.kind = kind
         self.source = source
+        self.metadata = metadata
 
     def check_for_problems(self) -> (bool, list):
         """
@@ -378,6 +382,7 @@ class Annotation:
             "data": self.data,
             "kind": self.kind,
             "source": self.source,
+            "metadata": self.metadata,
         }
 
     @classmethod

@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS an_annotations (
   annotation jsonb NOT NULL,
   source integer NOT NULL,
   created timestamptz NOT NULL DEFAULT 'now',
-  annotator bigserial REFERENCES an_annotators(id) ON DELETE SET NULL
+  annotator bigserial REFERENCES an_annotators(id) ON DELETE SET NULL,
+  metadata jsonb
 );
 
 CREATE INDEX IF NOT EXISTS an_annotations_asset_summary_code_idx ON an_annotations (asset_id, summary_code, source);

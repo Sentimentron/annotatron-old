@@ -34,11 +34,8 @@ class TestAnnotation(TestCase):
         """
         :return: s
         """
-        #asset: Asset, summary_code: str, data: object, kind: str, source: str
-        a = Annotation(self.a, "TRANSCRIPT", "This is an example", "text", "user")
+        a = Annotation("TRANSCRIPT", "This is an example", "text", "user")
         ret = a.to_json()
-        self.assertEqual(ret["asset"]["name"], "test_2")
-        self.assertEqual(ret["corpus"]["name"], "debug-sample-corpus")
         self.assertEqual(ret["summary_code"], "TRANSCRIPT")
         self.assertEqual(ret["data"], "This is an example")
         self.assertEqual(ret["kind"], "text")
@@ -46,8 +43,6 @@ class TestAnnotation(TestCase):
 
     def test_from_json(self):
         data = {
-            "corpus": self.corpus.to_json(),
-            "asset": self.a.to_json(),
             "summary_code": "WORDS",
             "data": [1.0, 2.0],
             "kind": "1d_segmentation",
@@ -62,3 +57,12 @@ class TestAnnotation(TestCase):
         self.assertEqual(len(an.data), 2)
         self.assertEqual(an.kind, "1d_segmentation")
         self.assertEqual(an.source, "user")
+
+    def test_upload_reference(self):
+        a = Annotation(self.a, "TRANSCRIPT", "This is an example", "text", "reference")
+        b = self.an.add_annotation_to_asset(self.a, a)
+        self.assertEqual(a, b)
+
+        entries = self.an.retrieve_annotations(self.corpus, a)
+        for
+
