@@ -1,5 +1,4 @@
-from models import Corpus, User, Asset, SkinnyAsset
-from utils import url
+from .models import Corpus, User, Asset, SkinnyAsset
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -82,6 +81,7 @@ class Annotatron:
         url = self.url("v1/corpora/{}/".format(corpus.name))
         response = requests.post(url, json=to_upload, auth=self.auth)
         if response.status_code != 201:
+            print(to_upload)
             print(response.text)
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
         return asset

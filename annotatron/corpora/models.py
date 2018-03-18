@@ -36,7 +36,7 @@ class Asset(models.Model):
     # This contains the human-readable hash of binary_content, enforced at the database level.
     sha_512_sum = models.TextField(null=False)
     # This field contains information provided by the user on upload that isn't part of the Asset itself
-    metadata = JSONField()
+    metadata = JSONField(null=True)
 
     class Meta:
         managed = False

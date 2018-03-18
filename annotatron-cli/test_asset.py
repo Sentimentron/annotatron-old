@@ -1,8 +1,9 @@
 from unittest import TestCase
 import requests
 import os.path
-from models import Asset
+from pyannotatron import Asset
 from utils import url, authorize, remove_authorization
+
 
 class TestAsset(TestCase):
 
@@ -17,16 +18,22 @@ class TestAsset(TestCase):
         self.dir = os.path.dirname(os.path.abspath(__file__))
 
     def test_to_json(self):
-        a = Asset("test", "Example".encode("utf8"), "text/plain", "text")
+        """
+            def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None):
+        :return:
+        """
+        a = Asset("test", "Example".encode("utf8"), "text/plain", "text", "somasdfasdfasdf", {"hi": "world"})
         ret = a.to_json()
         self.assertEqual(ret['name'], 'test')
         self.assertEqual(ret['mime_type'], 'text/plain')
         self.assertEqual(ret['kind'], 'text')
         self.assertEqual(ret['content'], 'RXhhbXBsZQ==')
+        self.assertEqual(ret['sha_512_sum'], 'somasdfasdfasdf')
+        self.assertEqual(ret['metadata']['hi'], 'world')
 
     def test_from_text_file(self):
         path = os.path.join(self.dir, "test_files", "test_1.txt")
-        a = Asset.from_text_file(, path
+        a = Asset.from_text_file(path, "test_1");
 
         self.assertEqual(a.name, "test_1")
         self.assertEqual(a.content, b"This is the first test file.")
@@ -36,7 +43,8 @@ class TestAsset(TestCase):
     def test_from_bytes(self):
         path = os.path.join(self.dir, "test_files", "test_1.txt")
         with open(path, 'rb') as fin:
-            a = Asset.from_bytes(fin.read(), "test_1")
+
+            a = Asset.from_bytes(fin.read(), "test_1", kind="text")
 
             self.assertEqual(a.name, "test_1")
             self.assertEqual(a.content, b"This is the first test file.")
@@ -49,10 +57,14 @@ class TestAsset(TestCase):
             "name": "test",
             "mime_type": "text/plain",
             "kind": "text",
-            "content": "RXhhbXBsZQ=="
+            "content": "RXhhbXBsZQ==",
+            "metadata": {
+                "hi": "world"
+            }
         }
         a = Asset.from_json(d)
         self.assertEqual(a.name, "test")
         self.assertEqual(a.mime_type, "text/plain")
         self.assertEqual(a.kind, "text")
         self.assertEqual(a.content, b"Example")
+        self.assertEqual(a.metadata["hi"], "world")

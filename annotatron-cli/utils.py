@@ -2,7 +2,7 @@ import os
 import requests
 from requests.auth import HTTPBasicAuth
 
-from models import User
+from pyannotatron import User
 
 
 def url(path):

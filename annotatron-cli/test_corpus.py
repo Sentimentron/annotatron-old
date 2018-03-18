@@ -1,7 +1,6 @@
 from unittest import TestCase
-from .annotatron import Annotatron, AnnotatronException
-from .utils import url, authorize, remove_authorization
-from .models import Corpus, Asset
+from utils import url, authorize, remove_authorization
+from pyannotatron import Asset, Corpus, Annotatron, AnnotatronException
 import requests
 import os
 

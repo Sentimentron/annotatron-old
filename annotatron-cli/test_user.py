@@ -3,7 +3,7 @@ from unittest import TestCase
 import requests
 from requests.auth import HTTPBasicAuth
 
-from models import User, ConfigurationResponse
+from pyannotatron import User, ConfigurationResponse
 from utils import url
 
 
@@ -63,5 +63,5 @@ class TestUser(TestCase):
         self.assertEqual(r.status_code, 200)
 
         r = requests.post(url("v1/control/setup"), json=u.to_json())
-        self.assertEquals(r.status_code, 401)
+        self.assertEqual(r.status_code, 401)
 

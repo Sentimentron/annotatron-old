@@ -78,7 +78,7 @@ class AssetUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Asset
-        fields = ('name', 'kind', 'mime_type', 'content', 'corpus')
+        fields = ('name', 'kind', 'mime_type', 'content', 'corpus', 'metadata', 'sha_512_sum')
 
 
 class AssetSerializer(serializers.ModelSerializer):
