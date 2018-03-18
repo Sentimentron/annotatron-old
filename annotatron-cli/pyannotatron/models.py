@@ -5,6 +5,8 @@ import hashlib
 import os
 import mimetypes
 import tempfile
+import numbers
+
 
 class ConfigurationResponse:
     """
@@ -18,6 +20,34 @@ class ConfigurationResponse:
     @classmethod
     def from_json(cls, json):
         return ConfigurationResponse(**json)
+
+class Corpus:
+    """
+        Represents Annotatron's concept of a corpus, which is a collection of Assets.
+    """
+
+    def __init__(self, name, description=None):
+        self.name = name
+        self.description = description
+        self.server = None
+
+    def to_json(self) -> dict:
+        """
+        Converts this object to an API-compatible form.
+        :return: A dict, ready for conversion to JSON.
+        """
+
+        ret = {"name": self.name}
+        if self.description is not None:
+            ret["description"] = self.description
+
+        return ret
+
+    @classmethod
+    def from_json(cls, dict):
+        dict = copy.deepcopy(dict)
+        dict.pop('id', None)
+        return Corpus(**dict)
 
 class User:
     """
@@ -66,7 +96,7 @@ class Asset:
         Represents Annotatron's idea of a document, stored in a Corpus.
     """
 
-    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None):
+    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None, corpus:Corpus=None):
         """
         Raw constructor for an Asset, probably one that's about to be uploaded.
         :param name: This is a key, unique from all other identifiers for assets in this corpus, used to retrieve this
@@ -76,31 +106,38 @@ class Asset:
         :param kind: 'audio', 'text', 'video' etc
         :param sha_512_sum: The SHA512 checksum of contents.
         :param metadata: An arbitrary JSON-encodable dictionary of extra information.
+        :param id: The upstream identifier.
         """
         self.name = name
         self.mime_type = mime_type
         self.kind = kind
         self.sha_512_sum = sha_512_sum
         self.metadata = metadata
+        self.corpus = corpus
         try:
             self.content = content
         except AttributeError:
             # Being called as part of a SkinnyAsset construction.
             pass # Gulp!
 
-    def to_json(self) -> dict:
+    def to_json(self, skinny=False) -> dict:
         """
         Converts this Asset to a JSON representation for Annotatron's API.
         :return: The dict representation.
         """
-        return {
+        ret = {
             "name": self.name,
             "mime_type": self.mime_type,
             "kind": self.kind,
-            "content": base64.standard_b64encode(self.content).decode("utf8"),
+
             "metadata": self.metadata,
             "sha_512_sum": self.sha_512_sum
         }
+
+        if not skinny:
+            ret["content"] = base64.standard_b64encode(self.content).decode("utf8")
+
+        return ret
 
     def check_for_problems(self) -> (bool, list):
         """
@@ -218,7 +255,7 @@ class Asset:
 
 
     @classmethod
-    def from_json(cls, dict):
+    def from_json(cls, dict, corpus=None):
         """
         Constructs a new Asset from its remote representation.
         :param dict: The JSON to parse.
@@ -226,6 +263,7 @@ class Asset:
         """
         dict = copy.deepcopy(dict)
         dict['content'] = base64.standard_b64decode(dict['content'])
+        dict['corpus'] = corpus
         return Asset(**dict)
 
 
@@ -247,39 +285,109 @@ class SkinnyAsset(Asset):
         return self._content
 
     @classmethod
-    def from_json(cls, content_callback, dict):
+    def from_json(cls, content_callback, dict, corpus):
         dict = copy.deepcopy(dict)
-        print(dict)
+        dict["corpus"] = corpus
         return SkinnyAsset(content_callback, **dict)
 
 
-class Corpus:
+class Annotation:
     """
-        Represents Annotatron's concept of a corpus, which is a collection of Assets.
+        An Annotation is a lump of JSON attached to an Asset. They can be in response
+        to a question.
     """
 
-    def __init__(self, name, description=None):
-        self.name = name
-        self.description = description
-        self.server = None
+    def __init__(self, asset: Asset, summary_code: str, data: object, kind: str, source: str):
+        """
+        Create an Annotation object, which tells us something about an Asset.
+        :param asset: The Asset we're annotating.
+        :param summary_code: This is used to group and summarize responses from multiple annotators.
+        :param data: JSON-serializable data that comprises the annotation.
+        :param kind: e.g. "text", "segmentation_1d", "range_1d" etc.
+        :param source: Either "reference" or "human"
+        """
+
+        self.asset = asset
+        self.summary_code = summary_code
+        self.data = data
+        self.kind = kind
+        self.source = source
+
+    def check_for_problems(self) -> (bool, list):
+        """
+        Validates this Annotation for problems that may stop Annotatron from processing it.
+        :return: A tuple (might_work, problems). If might_work is False, there's definitely a problem.
+         If might_work is True, there still may be a problem.
+        """
+        might_work = True
+        errors = []
+        if self.asset is None:
+            might_work = False
+            errors.append("asset: cannot be None")
+        if self.asset.name is None:
+            might_work = False
+            errors.append("asset.name: cannot be None")
+        if self.asset.corpus is None:
+            might_work = False
+            errors.append("asset.corpus: cannot be None")
+        if not isinstance(self.asset.corpus, Corpus):
+            might_work = False
+            errors.append("asset.corpus: must be a Corpus")
+        if self.summary_code is None:
+            might_work = False
+            errors.append("summary_code: cannot be None")
+        if self.data is None:
+            might_work = False
+            errors.append("data: cannot be None")
+        if self.kind is None:
+            might_work = False
+            errors.append("kind: cannot be None")
+        if self.source is None:
+            might_work = False
+            errors.append("source: cannot be None")
+
+        valid_kinds = ["text", "1d_segmentation"]
+        if self.kind not in valid_kinds:
+            errors.append("kind: unrecognized (choose from '%s')".format(",".join(valid_kinds)))
+
+        if self.kind == "text":
+            if not isinstance(self.data, str):
+                errors.append("data: format for 'text' should be a string")
+        elif self.kind == "1d_segmentation":
+            if not isinstance(self.data, list):
+                errors.append("1d_segmentation: format for '1d_segmentation' should be a list")
+            else:
+                for elem in self.data:
+                    failed_numeric_check = False
+                    if not isinstance(elem, numbers.Integral):
+                        failed_numeric_check = True
+                    if failed_numeric_check:
+                        errors.append("1d_segmentation: format for '1d_segmentation' should be a list of numbers")
+
+        valid_sources = ["reference", "user", "summary"]
+        if self.source not in valid_sources:
+            errors.append("source: unrecognized (choose from '%s')".format(",".join(valid_sources)))
+
+        return might_work, errors
 
     def to_json(self) -> dict:
-        """
-        Converts this object to an API-compatible form.
-        :return: A dict, ready for conversion to JSON.
-        """
-
-        ret = {"name": self.name}
-        if self.description is not None:
-            ret["description"] = self.description
-
-        return ret
+        return {
+            "asset": self.asset.to_json(skinny=False),
+            "corpus": self.asset.corpus.to_json(),
+            "summary_code": self.summary_code,
+            "data": self.data,
+            "kind": self.kind,
+            "source": self.source,
+        }
 
     @classmethod
-    def from_json(cls, dict):
-        dict = copy.deepcopy(dict)
-        dict.pop('id', None)
-        return Corpus(**dict)
+    def from_json(cls, js):
+
+        corpus = Corpus.from_json(js["corpus"])
+        js.pop('corpus', None)
+        js["asset"] = SkinnyAsset.from_json(content_callback=None, dict=js["asset"], corpus=corpus)
+
+        return cls(**js)
 
 
 class QuestionPlaceHolder:

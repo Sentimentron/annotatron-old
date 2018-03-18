@@ -111,9 +111,9 @@ class Annotatron:
         url = self.url("v1/corpora/{}/".format(corpus.name))
         response = requests.post(url, json=to_upload, auth=self.auth)
         if response.status_code != 201:
-            print(to_upload)
-            print(response.text)
+            logging.error("to_upload:%s, response.text:%s", to_upload, response.text)
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        asset.corpus = corpus
         return asset
 
     def retrieve_asset_content(self, corpus: Corpus, asset: Asset):
@@ -126,6 +126,7 @@ class Annotatron:
             #print(response.status_code)
             #print(response.text)
             raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
+        asset.corpus = corpus
         return response.content
 
     def list_assets_in_corpus(self, corpus: Corpus):
@@ -141,4 +142,4 @@ class Annotatron:
             raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
         for item in response.json():
             r1 = lambda a, c=corpus, provider=self: provider.retrieve_asset_content(c, a)
-            yield SkinnyAsset.from_json(r1, item)
+            yield SkinnyAsset.from_json(r1, item, corpus)
