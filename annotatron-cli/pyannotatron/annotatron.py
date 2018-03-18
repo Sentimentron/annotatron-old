@@ -1,3 +1,5 @@
+import logging
+
 from .models import Corpus, User, Asset, SkinnyAsset
 
 import requests
@@ -69,6 +71,35 @@ class Annotatron:
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
         return self.get_corpus_by_name(corpus.name)
 
+    def is_asset_in_corpus(self, corpus: Corpus, asset: Asset) -> True:
+        """
+        Determines whether a matching asset already exists in the target Corpus.
+        :param corpus: The Corpus we're checking.
+        :param asset: The Asset we're unsure about.
+        :return: True, if either a name or checksum matches.
+        """
+        to_upload = asset.to_json()
+
+        # Run a pre-upload check to see if we can skip the upload
+        url = self.url("v1/corpora/{}/check".format(corpus.name))
+        to_upload['content'] = "YQ=="
+        response = requests.post(url, json=to_upload, auth=self.auth)
+        if response.status_code == 422:
+            if "non_field_errors" in response.json()["errors"]:
+                errors = response.json()["errors"]["non_field_errors"]
+                for error in errors:
+                    if "must make a unique set" in error:
+                        return True
+            raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        if response.status_code != 200:
+            logging.error(response.text)
+            raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
+        if response.json()["matching_name"]:
+            return True
+        if response.json()["matching_checksums"] > 0:
+            return True
+        return False
+
     def add_asset_to_corpus(self, corpus: Corpus, asset: Asset):
         """
         Uploads a given Asset and inserts it into a parent Corpus.
@@ -76,7 +107,6 @@ class Annotatron:
         :param asset: The Asset itself.
         :return: The same Asset.
         """
-
         to_upload = asset.to_json()
         url = self.url("v1/corpora/{}/".format(corpus.name))
         response = requests.post(url, json=to_upload, auth=self.auth)
@@ -97,7 +127,6 @@ class Annotatron:
             #print(response.text)
             raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
         return response.content
-
 
     def list_assets_in_corpus(self, corpus: Corpus):
         """

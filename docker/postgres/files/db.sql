@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS an_corpora (
   description text
 );
 
+CREATE INDEX IF NOT EXISTS an_corpora_name ON an_corpora(name);
+
 -- Used for checksum of asset bytes.
 CREATE OR REPLACE FUNCTION sha1(bytea) returns text AS $$
   SELECT encode(digest($1, 'sha512'), 'hex')
@@ -28,7 +30,8 @@ CREATE TABLE IF NOT EXISTS an_assets (
   date_uploaded timestamptz NOT NULL DEFAULT 'now',
   sha_512_sum text NOT NULL,
   metadata jsonb,
-  CHECK(sha1(binary_content) = sha_512_sum)
+  CHECK(sha1(binary_content) = sha_512_sum),
+  UNIQUE (name, corpus_id)
 );
 
 CREATE INDEX IF NOT EXISTS an_assets_corpus_idx ON an_assets(corpus_id);

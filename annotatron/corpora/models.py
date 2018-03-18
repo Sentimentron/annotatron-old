@@ -22,7 +22,7 @@ class Asset(models.Model):
     """
 
     # This is a human-readable name for this individual asset.
-    name = models.TextField(unique=True, null=False)
+    name = models.TextField(null=False)
     # This can be anything, but is normally "audio", "image" or similar.
     kind = models.TextField(null=False)
     # This contains the detected mime_type for the file.
@@ -41,3 +41,4 @@ class Asset(models.Model):
     class Meta:
         managed = False
         db_table = "an_assets"
+        unique_together = (("name", "corpus"),)

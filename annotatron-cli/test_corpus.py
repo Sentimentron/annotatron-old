@@ -66,3 +66,17 @@ class TestCorpus(TestCase):
             single_file = asset
 
         self.assertEqual(a.content, single_file.content)
+
+    def test_upload_and_check(self):
+        corpus = Corpus("debug-sample-corpus", "An example corpus")
+        an = Annotatron(url(''), auth=self.auth)
+        an.send_corpus(corpus)
+
+        a = Asset.from_text_file(os.path.join(self.dir, 'test_files', 'test_2.txt'), 'test_2')
+        self.assertFalse(an.is_asset_in_corpus(corpus, a))
+        an.add_asset_to_corpus(corpus, a)
+        self.assertTrue(an.is_asset_in_corpus(corpus, a))
+
+        # Change the name to something else and see if it's still in the Corpus
+        a.name = "Something_Different"
+        self.assertTrue(an.is_asset_in_corpus(corpus, a))

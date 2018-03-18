@@ -109,7 +109,28 @@ class AssetView(APIView):
             data = {
                 "errors": serializer.errors
             }
-            return Response(data, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
+class AssetCheckView(APIView):
+    """
+        This is used to check whether the Asset has already been uploaded.
+    """
+    def post(self, request, corpus):
+        corpus = Corpus.objects.get(name=corpus)
+        request.data["corpus"] = corpus.id
+        serializer = AssetUploadSerializer(data=request.data)
+        if serializer.is_valid():
+            binary_assets = Asset.objects.filter(corpus=corpus).filter(sha_512_sum=serializer.validated_data["sha_512_sum"])
+            data = {
+                "matching_checksums": binary_assets.count(),
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        else:
+            data = {
+                "errors": serializer.errors
+            }
+            return Response(data, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 class AssetContentView(APIView):
