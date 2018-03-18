@@ -3,9 +3,9 @@ from django.contrib.postgres.fields import JSONField
 from django.contrib.auth import get_user_model
 
 ANNOTATION_SOURCES = (
-    (0, 'reference'),
-    (1, 'user'),
-    (2, 'system'),
+    (1, 'reference'),
+    (2, 'user'),
+    (3, 'system'),
 )
 
 # Create your models here.
@@ -54,7 +54,7 @@ class Annotator(models.Model):
     """
         An Annotator is Annotatron's extension to Django's user object
     """
-    external_id = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+    external = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     created = models.DateTimeField(null=False, auto_now_add=True)
 
     class Meta:
@@ -79,13 +79,17 @@ class Annotation(models.Model):
         the summary code. Attempts to mix multiple kinds will trigger a warning.
     """
 
-    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, null=False)
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, null=False, related_name='annotations')
     kind = models.TextField(null=False)
     summary_code = models.TextField(null=False)
-    annotation = JSONField(null=False)
+    data = JSONField(null=False)
     # Keyed as 0 = reference, 1 = user, 2 = system
     source = models.PositiveSmallIntegerField(null=False, choices=ANNOTATION_SOURCES)
     created = models.DateTimeField(null=False, auto_now_add=True)
     annotator = models.ForeignKey(Annotator, on_delete=models.SET_NULL, null=True)
-    metadata = JSONField()
+    metadata = JSONField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "an_annotations"
 

@@ -46,11 +46,10 @@ class TestAnnotation(TestCase):
             "summary_code": "WORDS",
             "data": [1.0, 2.0],
             "kind": "1d_segmentation",
-            "source": "user"
+            "source": "user",
+            "metadata": {}
         }
         an = Annotation.from_json(data)
-        self.assertEqual(an.asset.corpus.name, "debug-sample-corpus")
-        self.assertEqual(an.asset.name, "test_2")
         self.assertEqual(an.summary_code, "WORDS")
         self.assertAlmostEqual(an.data[0], 1.0)
         self.assertAlmostEqual(an.data[1], 2.0)
@@ -59,10 +58,40 @@ class TestAnnotation(TestCase):
         self.assertEqual(an.source, "user")
 
     def test_upload_reference(self):
-        a = Annotation(self.a, "TRANSCRIPT", "This is an example", "text", "reference")
+        a = Annotation("TRANSCRIPT", "This is an example", "text", "reference")
+        b = self.an.add_annotation_to_asset(self.corpus, self.a, a)
+        self.assertEqual(a, b)
+
+        entries = self.an.retrieve_asset_annotations(self.corpus, self.a)
+        self.assertTrue("reference" in entries)
+        self.assertEqual(len(entries), 1)
+
+        reference_annotations = entries["reference"]
+        self.assertTrue("TRANSCRIPT" in reference_annotations)
+        self.assertEqual(len(reference_annotations), 1)
+
+        annotations = reference_annotations["TRANSCRIPT"]
+        self.assertEqual(len(annotations), 1)
+
+        annotation = annotations[0]
+        self.assertEqual(annotation.data, "This is an example")
+
+    def test_upload_system(self):
+        a = Annotation("TRANSCRIPT", "This is an example", "text", "system")
         b = self.an.add_annotation_to_asset(self.a, a)
         self.assertEqual(a, b)
 
-        entries = self.an.retrieve_annotations(self.corpus, a)
-        for
+        entries = self.an.retrieve_asset_annotations(self.corpus, self.a)
+        self.assertTrue("system" in entries)
+        self.assertEqual(len(entries), 1)
+
+        reference_annotations = entries["reference"]
+        self.assertTrue("TRANSCRIPT" in reference_annotations)
+        self.assertEqual(len(reference_annotations), 1)
+
+        annotations = reference_annotations["TRANSCRIPT"]
+        self.assertEqual(len(annotations), 1)
+
+        annotation = annotations[0]
+        self.assertEqual(annotation.data, "This is an example")
 

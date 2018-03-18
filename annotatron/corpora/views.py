@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser
 
-from .models import Corpus, Asset, Annotation
+from .models import Corpus, Asset, Annotation, Annotator, ANNOTATION_SOURCES
 
 
 class CorpusSerializer(serializers.ModelSerializer):
@@ -149,12 +149,15 @@ class AssetContentView(APIView):
     """
 
     def get(self, request, corpus, asset):
-        object = Corpus.objects.get(name=corpus).assets.get(name=asset)
-        serializer = AssetUploadSerializer(object)
-        #return Response(serializer.data)
+        try:
+            asset_obj = Corpus.objects.get(name=corpus).assets.get(name=asset)
+        except Corpus.DoesNotExist:
+            return Response({}, status=status.HTTP_404_NOT_FOUND)
+        except Asset.DoesNotExist:
+            return Response({}, status=status.HTTP_404_NOT_FOUND)
 
-        return HttpResponse(object.binary_content, content_type=object.mime_type)
-        #return Response(object.binary_content, content_type=object.mime_type)
+
+        return HttpResponse(asset_obj.binary_content, content_type=asset_obj.mime_type)
 
 
 class AnnotationCreateListView(APIView):
@@ -162,10 +165,36 @@ class AnnotationCreateListView(APIView):
         This view returns a list of active annotations, or creates a new one.
     """
 
+    def get(self, request, corpus, asset):
+
+        try:
+            asset_obj = Corpus.objects.get(name=corpus).assets.get(name=asset)
+        except Corpus.DoesNotExist:
+            return Response({}, status=status.HTTP_404_NOT_FOUND)
+        except Asset.DoesNotExist:
+            return Response({}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AnnotationSerializer(asset_obj.annotations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     def post(self, request, corpus, asset):
-        corpus = Corpus.objects(name=corpus)
-        asset = Annotation.objects.filter(corpus=corpus).get(name=asset)
-        request.data["asset"] = asset.id
+
+        # Check whether we have an Annotator record for this user
+        annotator, _ = Annotator.objects.get_or_create(external=request.user)
+
+        # Locate the asset
+        corpus_obj = Corpus.objects.get(name=corpus)
+        asset_obj = Asset.objects.filter(corpus=corpus_obj).get(name=asset)
+
+        # Augment the request with additional data
+        request.data["asset"] = asset_obj.id
+        request.data["annotator"] = annotator.id
+
+        # Change the source from a human-readable description into the database field
+        for _id, human in ANNOTATION_SOURCES:
+            if request.data["source"] == human:
+                request.data["source"] = _id
+
         serializer = AnnotationSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()

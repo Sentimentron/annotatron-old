@@ -65,7 +65,7 @@ services:
     image: sentimentron/functron:1.0.0
     container_name: AN_functron
     volumes:
-      - /var/run/docker.sock:/tmp/functron:/tmp/functronvar/run/docker.sock
+      - /var/run/docker.sock:/tmp/functronvar/run/docker.sock
       - /tmp/functron:/tmp/functron
     ports:
       - 8081:8081

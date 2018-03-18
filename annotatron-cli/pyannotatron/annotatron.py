@@ -94,8 +94,6 @@ class Annotatron:
         if response.status_code != 200:
             logging.error(response.text)
             raise AnnotatronException("POST {}, bad status code {}".format(url, response.status_code), response)
-        if response.json()["matching_name"]:
-            return True
         if response.json()["matching_checksums"] > 0:
             return True
         return False
@@ -116,14 +114,16 @@ class Annotatron:
         asset.corpus = corpus
         return asset
 
-    def add_annotation_to_corpus(self, annotation: Annotation) -> Annotation:
+    def add_annotation_to_asset(self, corpus:Corpus, asset: Asset, annotation: Annotation) -> Annotation:
         """
         Uploads a given Annotation into a Corpus, attached to an Asset.
-        :param annotation: The Annotation to upload, with the :asset: field filled in.
+        :param corpus: The Corpus that we're talking about.
+        :param asset: The asset that this Annotation is attached to.
+        :param annotation: The Annotation to upload.
         :return: The same Annotation.
         """
-        to_upload = asset.to_json()
-        url = self.url("v1/corpora/{}/{}/annotations".format(annotation.corpus.name, annotation.asset.name))
+        to_upload = annotation.to_json()
+        url = self.url("v1/corpora/{}/{}/annotations".format(corpus.name, asset.name))
         response = requests.post(url, json=to_upload, auth=self.auth)
         if response.status_code != 201:
             logging.error("to_upload:%s, response.text:%s", to_upload, response.text)
@@ -180,4 +180,4 @@ class Annotatron:
             raise AnnotatronException("GET {}, bad status code {}".format(url, response.status_code), response)
         for item in response.json():
             r1 = lambda a, c=corpus, provider=self: provider.retrieve_asset_content(c, a)
-            yield SkinnyAsset.from_json(r1, item, corpus)
+            yield SkinnyAsset.from_json(r1, item)

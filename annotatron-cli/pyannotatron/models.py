@@ -98,7 +98,7 @@ class Asset:
         Represents Annotatron's idea of a document, stored in a Corpus.
     """
 
-    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None, corpus:Corpus=None):
+    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None):
         """
         Raw constructor for an Asset, probably one that's about to be uploaded.
         :param name: This is a key, unique from all other identifiers for assets in this corpus, used to retrieve this
@@ -108,14 +108,12 @@ class Asset:
         :param kind: 'audio', 'text', 'video' etc
         :param sha_512_sum: The SHA512 checksum of contents.
         :param metadata: An arbitrary JSON-encodable dictionary of extra information.
-        :param id: The upstream identifier.
         """
         self.name = name
         self.mime_type = mime_type
         self.kind = kind
         self.sha_512_sum = sha_512_sum
         self.metadata = metadata
-        self.corpus = corpus
         try:
             self.content = content
         except AttributeError:
@@ -287,9 +285,8 @@ class SkinnyAsset(Asset):
         return self._content
 
     @classmethod
-    def from_json(cls, content_callback, dict, corpus):
+    def from_json(cls, content_callback, dict):
         dict = copy.deepcopy(dict)
-        dict["corpus"] = corpus
         return SkinnyAsset(content_callback, **dict)
 
 
@@ -299,10 +296,9 @@ class Annotation:
         to a question.
     """
 
-    def __init__(self, asset: Asset, summary_code: str, data: object, kind: str, source: str, metadata: object):
+    def __init__(self, summary_code: str, data: object, kind: str, source: str, metadata: object=None):
         """
         Create an Annotation object, which tells us something about an Asset.
-        :param asset: The Asset we're annotating.
         :param summary_code: This is used to group and summarize responses from multiple annotators.
         :param data: JSON-serializable data that comprises the annotation.
         :param kind: e.g. "text", "segmentation_1d", "range_1d" etc.
@@ -310,7 +306,6 @@ class Annotation:
         :param metadata: Anything that's not directly related to the annotation's data (JSON-serializable).
         """
 
-        self.asset = asset
         self.summary_code = summary_code
         self.data = data
         self.kind = kind
@@ -325,18 +320,7 @@ class Annotation:
         """
         might_work = True
         errors = []
-        if self.asset is None:
-            might_work = False
-            errors.append("asset: cannot be None")
-        if self.asset.name is None:
-            might_work = False
-            errors.append("asset.name: cannot be None")
-        if self.asset.corpus is None:
-            might_work = False
-            errors.append("asset.corpus: cannot be None")
-        if not isinstance(self.asset.corpus, Corpus):
-            might_work = False
-            errors.append("asset.corpus: must be a Corpus")
+
         if self.summary_code is None:
             might_work = False
             errors.append("summary_code: cannot be None")
@@ -376,8 +360,6 @@ class Annotation:
 
     def to_json(self) -> dict:
         return {
-            "asset": self.asset.to_json(skinny=False),
-            "corpus": self.asset.corpus.to_json(),
             "summary_code": self.summary_code,
             "data": self.data,
             "kind": self.kind,
@@ -387,11 +369,6 @@ class Annotation:
 
     @classmethod
     def from_json(cls, js):
-
-        corpus = Corpus.from_json(js["corpus"])
-        js.pop('corpus', None)
-        js["asset"] = SkinnyAsset.from_json(content_callback=None, dict=js["asset"], corpus=corpus)
-
         return cls(**js)
 
 

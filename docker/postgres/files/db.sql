@@ -19,7 +19,6 @@ CREATE OR REPLACE FUNCTION sha1(bytea) returns text AS $$
 $$ LANGUAGE SQL STRICT IMMUTABLE;
 
 -- Primary asset table.
-DROP TABLE IF EXISTS an_assets;
 CREATE TABLE IF NOT EXISTS an_assets (
   id bigserial PRIMARY KEY,
   name text UNIQUE NOT NULL,
@@ -39,7 +38,6 @@ CREATE INDEX IF NOT EXISTS an_assets_corpus_name_idx ON an_assets(corpus_id, nam
 CREATE INDEX IF NOT EXISTS an_assets_corpus_checksum_idx ON an_assets(corpus_id, sha_512_sum);
 
 -- Keeps the notion of annotators separate from a Django user.
-DROP TABLE IF EXISTS an_annotators;
 CREATE TABLE IF NOT EXISTS an_annotators (
   id bigserial PRIMARY KEY,
   external_id bigint NOT NULL,                  -- Undeclared link to the Django users table.
@@ -50,16 +48,15 @@ CREATE TABLE IF NOT EXISTS an_annotators (
 CREATE INDEX IF NOT EXISTS an_annotators_external_info ON an_annotators(external_id);
 
 -- Primary annotations table, used for reference and user-contributed annotations.
-DROP TABLE IF EXISTS an_annotations;
 CREATE TABLE IF NOT EXISTS an_annotations (
   id bigserial PRIMARY KEY,
-  asset_id bigserial NOT NULL REFERENCES an_assets(id) ON DELETE CASCADE,
+  asset_id bigint NOT NULL REFERENCES an_assets(id) ON DELETE CASCADE,
   kind text NOT NULL,
   summary_code text NOT NULL,
-  annotation jsonb NOT NULL,
+  data jsonb NOT NULL,
   source integer NOT NULL,
   created timestamptz NOT NULL DEFAULT 'now',
-  annotator bigserial REFERENCES an_annotators(id) ON DELETE SET NULL,
+  annotator_id bigint REFERENCES an_annotators(id) ON DELETE SET NULL,
   metadata jsonb
 );
 
