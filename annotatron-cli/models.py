@@ -1,8 +1,10 @@
 import requests
 import copy
 import base64
+import hashlib
 import os
 import mimetypes
+import tempfile
 
 class ConfigurationResponse:
     """
@@ -64,26 +66,49 @@ class Asset:
         Represents Annotatron's idea of a document, stored in a Corpus.
     """
 
-    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None):
+    def __init__(self, name=None, content:bytes=None, mime_type=None, kind=None, sha_512_sum=None, metadata=None):
+        """
+        Raw constructor for an Asset, probably one that's about to be uploaded.
+        :param name: This is a key, unique from all other identifiers for assets in this corpus, used to retrieve this
+                     item later.
+        :param content: The contents, as a byte string.
+        :param mime_type: Optional MIME type, link 'text/plain'
+        :param kind: 'audio', 'text', 'video' etc
+        :param sha_512_sum: The SHA512 checksum of contents.
+        :param metadata: An arbitrary JSON-encodable dictionary of extra information.
+        """
         self.name = name
         self.mime_type = mime_type
         self.kind = kind
+        self.sha_512_sum = sha_512_sum
+        self.metadata = metadata
         try:
             self.content = content
         except AttributeError:
             # Being called as part of a SkinnyAsset construction.
             pass # Gulp!
 
-
     def to_json(self) -> dict:
+        """
+        Converts this Asset to a JSON representation for Annotatron's API.
+        :return: The dict representation.
+        """
         return {
             "name": self.name,
             "mime_type": self.mime_type,
             "kind": self.kind,
-            "content": base64.standard_b64encode(self.content).decode("utf8")
+            "content": base64.standard_b64encode(self.content).decode("utf8"),
+            "metadata": self.metadata,
+            "sha_512_sum": self.sha_512_sum
         }
 
-    def check_for_problems(self, ann_instance=None) -> (bool, list):
+    def check_for_problems(self) -> (bool, list):
+        """
+        Checks for common problems which might prevent Annotatron from processing this Asset.
+        :return: (will_work, report), a pair of values. if will_work is False, then Annotatron definitely won't process
+                  the Asset correctly. The report contains a list of human-readable strings that describe potential
+                  problems.
+        """
         will_work, ret = True, []
         if self.kind != "audio":
             if self.kind is None:
@@ -100,6 +125,13 @@ class Asset:
             will_work = False
             ret.append("content appears to be blank")
 
+        if self.sha_512_sum is None:
+            will_work = False
+            ret.append("sha_512_sum is blank")
+
+        if self.mime_type is None:
+            ret.append("mimetype is blank, may cause issues downloading the asset later")
+
         if len(self.content) is None:
             will_work = False
             ret.append("content appears to have no length")
@@ -107,43 +139,91 @@ class Asset:
         return will_work, ret
 
     @classmethod
-    def from_bytes(cls, content, path_to_file, name=None, cannot_be_text=True, encoding=None):
+    def _from_bytes_and_file(cls, content, path_to_file, name=None, cannot_be_text=True, encoding=None, metadata=None,
+                             kind=None):
+
         if isinstance(content, str):
             raise AssertionError("content: should be utf-8 coded bytes (for text), or bytes (for binary)")
+
         base_name, extension = os.path.splitext(os.path.basename(path_to_file))
         if name is None:
             name = base_name
+
         mimetype, detected_encoding = mimetypes.guess_type(path_to_file)
         if encoding is None and detected_encoding:
             encoding = detected_encoding
         if mimetype == "text/plain" and encoding is not None:
             mimetype = "text/plain; charset={}".format(encoding)
-        print(mimetype)
-        if extension in [".wav", ".mp3", ".aac", ".mp4"]:
-            kind = "audio"
-        elif extension in [".txt"]:
-            if cannot_be_text:
-                raise AssertionError("Make sure you didn't mean to use from_txt_file")
-            kind = "text"
-        else:
-            kind = None
-        return Asset(name, content, mimetype, kind)
+
+        if kind is None:
+            if extension in [".wav", ".mp3", ".aac", ".mp4"]:
+                kind = "audio"
+            elif extension in [".txt"]:
+                if cannot_be_text:
+                    raise AssertionError("Make sure you didn't mean to use from_txt_file")
+                kind = "text"
+            else:
+                kind = None
+
+        checksummer = hashlib.sha512()
+        checksummer.update(content)
+        checksum = checksummer.hexdigest()
+
+        return Asset(name, content, mimetype, kind, checksum, metadata)
 
     @classmethod
-    def from_binary_file(cls, path_to_file, name=None):
+    def from_bytes(cls, content, name=None, metadata=None, kind=None):
+        """
+        Generates a new Asset from a raw byte string. Writes the string temporarily to disk for MIME detection.
+        It's strongly recommended to use a method like :from_binary_file: or :from_text_file: instead.
+        :param content: The content of this Asset, as a byte string.
+        :param name: A unique key that identifies this Asset.
+        :param metadata: JSON-serializable metadata.
+        :param kind: 'audio', 'video' etc.
+        :return: The constructed Asset.
+        """
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write(content)
+            return cls._from_bytes_and_file(content, fp.name, name, True, None, metadata, kind)
+
+    @classmethod
+    def from_binary_file(cls, path_to_file, name=None, metadata=None, kind=None):
+        """
+        Generates a new Asset from a binary file on disk.
+        :param path_to_file: The file to convert.
+        :param name: A unique name for this asset.
+        :param metadata: JSON-serializable metadata.
+        :param kind: 'audio' etc.
+        :return: The constructed Asset.
+        """
         with open(path_to_file, "rb") as fp:
             content = fp.read()
-            return cls.from_fp(content, path_to_file, name, cannot_be_text=True)
+            return cls._from_bytes_and_file(content, path_to_file, name, cannot_be_text=True, metadata=metadata,
+                                            kind=kind)
 
     @classmethod
-    def from_text_file(cls, path_to_file, encoding="utf8", name=None):
+    def from_text_file(cls, path_to_file:str, name=None, encoding="utf8", metadata=None):
+        """
+        Generates a new Asset from a text file on disk.
+        :param path_to_file: The file to convert.
+        :param name: A unique key for this item.
+        :param encoding: e.g. "utf8". Annotatron will store and handle the Asset using this encoding.
+        :param metadata: JSON-serializable metadata.
+        :return: The constructed Asset.
+        """
         with open(path_to_file, "r", encoding=encoding) as fp:
             content = fp.read().encode(encoding)
-            return cls.from_bytes(content, path_to_file, name, cannot_be_text=False, encoding="utf8")
+            return cls._from_bytes_and_file(content, path_to_file, name, cannot_be_text=False, encoding="utf8",
+                                            metadata=metadata)
 
 
     @classmethod
     def from_json(cls, dict):
+        """
+        Constructs a new Asset from its remote representation.
+        :param dict: The JSON to parse.
+        :return: The constructed Asset.
+        """
         dict = copy.deepcopy(dict)
         dict['content'] = base64.standard_b64decode(dict['content'])
         return Asset(**dict)
@@ -178,10 +258,9 @@ class Corpus:
         Represents Annotatron's concept of a corpus, which is a collection of Assets.
     """
 
-    def __init__(self, name, description=None, question_generator=None):
+    def __init__(self, name, description=None):
         self.name = name
         self.description = description
-        self.question_generator = question_generator
         self.server = None
 
     def to_json(self) -> dict:
@@ -193,8 +272,6 @@ class Corpus:
         ret = {"name": self.name}
         if self.description is not None:
             ret["description"] = self.description
-        if self.question_generator is not None:
-            ret["question_generator"] = self.question_generator
 
         return ret
 

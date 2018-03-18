@@ -11,11 +11,12 @@ CREATE TABLE IF NOT EXISTS an_corpora (
   description text
 );
 
--- Used for checksumming asset byte contents.
+-- Used for checksum of asset bytes.
 CREATE OR REPLACE FUNCTION sha1(bytea) returns text AS $$
   SELECT encode(digest($1, 'sha512'), 'hex')
 $$ LANGUAGE SQL STRICT IMMUTABLE;
 
+-- Primary asset table.
 DROP TABLE IF EXISTS an_assets;
 CREATE TABLE IF NOT EXISTS an_assets (
   id bigserial primary key,

@@ -125,6 +125,7 @@ class AssetContentView(APIView):
         return HttpResponse(object.binary_content, content_type=object.mime_type)
         #return Response(object.binary_content, content_type=object.mime_type)
 
+
 class DebugRemoveAssetsView(APIView):
     """
         This is a debug view (intended for use with unit testing) which

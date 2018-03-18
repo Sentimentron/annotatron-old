@@ -51,6 +51,7 @@ class DebugUserSerializer(serializers.Serializer):
         Debug-only serializer which programmatically creates
         new users (intended for unit testing).
     """
+    permission_classes = (AllowAny,)
 
     username = serializers.CharField(required=True)
     email = serializers.CharField(required=True)
@@ -72,7 +73,7 @@ class DebugUserCreateView(generics.ListCreateAPIView):
     """
         This is a debug view which programmatically creates new users.
     """
-
+    permission_classes = (AllowAny,)
     queryset = User.objects.all()
     serializer_class = DebugUserSerializer
 
@@ -81,6 +82,7 @@ class DebugUserDeleteView(APIView):
     """
         Removes any users with "debug-" in front of their name.
     """
+    permission_classes = (AllowAny,)
     def post(self, request):
         User.objects.filter(username__startswith="debug-").delete()
         return Response()
@@ -95,7 +97,7 @@ class DebugSayHelloAPIView(APIView):
     """
         Used to check that authentication is working.
     """
-    permission_classes = (IsAdminUser,)
+    permission_classes = (AllowAny,)
 
     def post(self, request):
         return Response({"hello": "world"})

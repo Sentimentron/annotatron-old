@@ -28,6 +28,7 @@ def authorize():
 
     return HTTPBasicAuth('debug-user', 'debug')
 
+
 def remove_authorization():
     """
     Removes all temporary debug users.
