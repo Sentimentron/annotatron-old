@@ -174,8 +174,25 @@ class AnnotationCreateListView(APIView):
         except Asset.DoesNotExist:
             return Response({}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AnnotationSerializer(asset_obj.annotations, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        # TODO: I kind of hoped to be able to a GROUP BY to do this, but I can't figure out how to do it with
+        # Django's ORM.
+        annotations = asset_obj.annotations
+        ret = {}
+        for _id, human in ANNOTATION_SOURCES:
+            category = annotations.filter(source=_id)
+            if category.count() > 0:
+                ret[human] = {}
+                for obj in category:
+                    if obj.summary_code not in ret:
+                        ret[human][obj.summary_code] = []
+                    ret[human][obj.summary_code].append(obj)
+
+        for human in ret:
+            for summary_code in ret[human]:
+                serializer = AnnotationSerializer(ret[human][summary_code], many=True)
+                ret[human][summary_code] = serializer.data
+
+        return Response(ret, status=status.HTTP_200_OK)
 
     def post(self, request, corpus, asset):
 

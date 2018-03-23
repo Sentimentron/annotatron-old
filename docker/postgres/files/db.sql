@@ -60,4 +60,4 @@ CREATE TABLE IF NOT EXISTS an_annotations (
   metadata jsonb
 );
 
-CREATE INDEX IF NOT EXISTS an_annotations_asset_summary_code_idx ON an_annotations (asset_id, summary_code, source);
+--CREATE INDEX IF NOT EXISTS an_annotations_asset_summary_code_idx ON an_annotations (asset_id, summary_code, source);
