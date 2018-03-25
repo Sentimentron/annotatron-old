@@ -103,14 +103,18 @@ class AssetView(APIView):
         This is an API view which processes and handles assets.
     """
 
-    def get(self, request, corpus=None):
+    def get(self, request, corpus=None, asset=None):
         queryset = Corpus.objects.get(name=corpus).assets
-        serializer = AssetSerializer(queryset, many=True)
+        if asset:
+            queryset = queryset.get(name=asset)
+        serializer = AssetSerializer(queryset, many=asset is None)
         return Response(serializer.data)
 
-    def post(self, request, corpus=None):
+    def post(self, request, corpus=None, asset=None):
         corpus = Corpus.objects.get(name=corpus)
         request.data["corpus"] = corpus.id
+        if asset:
+            request.data["name"] = asset
         serializer = AssetUploadSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()

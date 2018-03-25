@@ -30,9 +30,10 @@ urlpatterns = [
     url(r'^v1/control/user', control.views.CheckAuthenticationView.as_view()),
 
     url(r'^v1/corpora/$', corpora.views.CorpusView.as_view()),
-    url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/$', corpora.views.AssetContentView.as_view()),
+    url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/content$', corpora.views.AssetContentView.as_view()),
     url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/annotations$', corpora.views.AnnotationCreateListView.as_view()),
     url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/$', corpora.views.AssetView.as_view()),
+    url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/(?P<asset>[-\_\w]+)/', corpora.views.AssetView.as_view()),
     url(r'^v1/corpora/(?P<corpus>[-\_\w]+)/check$', corpora.views.AssetCheckView.as_view()),
 
     url(r'^v1/debug/hello', control.views.DebugSayHelloAPIView.as_view()),
