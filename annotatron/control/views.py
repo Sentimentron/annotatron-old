@@ -40,6 +40,7 @@ class CheckAuthenticationView(APIView):
     """
         Returns the current username, just to check that we're logged in.
     """
+    permission_classes = (AllowAny,)
     def get(self, request):
         return Response({"username": request.user.username,
                          "is_staff": request.user.is_staff,
