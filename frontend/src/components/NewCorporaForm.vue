@@ -12,7 +12,7 @@
           <textarea v-model="description" type="password" placeholder="(Optional) Enter a description"/>
         </div>
         <div class="form-finalize">
-          <button value="Login" type="submit" v-on:click="createCorpus()">Create New Corpus</button>
+          <button value="Login" type="submit">Create New Corpus</button>
           <p v-bind:class="state">{{promptText}}</p>
         </div>
       </form>
@@ -22,6 +22,7 @@
 
 <script>
   import HTTP from '../http-common';
+
   export default {
     name: "new-corpora-form",
     data: function() {
@@ -38,7 +39,9 @@
 
         let processResult = (response) => {
           console.log(response);
-          this.$Progress.stop();
+          this.$Progress.finish();
+          this.state = 'success';
+          this.promptText = 'Successful.';
         };
 
         let processError = (response) => {
@@ -67,10 +70,11 @@
         }).then( (response) => {
           processResult(response);
         }).catch( (error) => {
-          if (error.response.status === 400) {
+          if (error.response != undefined && error.response.status === 400) {
             processValidationError(error.response);
           } else {
             processError(error);
+            throw error;
           }
         });
 

@@ -20,7 +20,7 @@
 
 <script>
   import HTTP from '../http-common';
-  import EventBus from '../global-bus';
+  import {EventBus} from '../global-bus';
 
   export default {
   name: 'login-form',
@@ -31,13 +31,8 @@
       email: '',
       promptText: '',
       state: 'normal',
+      bus: EventBus
     };
-  },
-  props: {
-    authenticationBus: {
-      required: true,
-      default: null,
-    },
   },
   methods: {
 
@@ -57,11 +52,11 @@
             this.promptText = 'Welcome.';
             this.state = 'success';
             if (response.data.is_superuser) {
-              EventBus.$emit('authenticationChanged', { authenticated: 'admin' });
+              this.bus.$emit('authenticationChanged', { authenticated: 'admin' });
             } else if (response.data.is_staff) {
-              EventBus.$emit('authenticationChanged', { authenticated: 'staff' });
+              this.bus.$emit('authenticationChanged', { authenticated: 'staff' });
             } else {
-              EventBus.$emit('authenticationChanged', { authenticated: 'annotator' });
+              this.bus.$emit('authenticationChanged', { authenticated: 'annotator' });
             }
             this.$router.push({ name: 'Welcome', params: { userData: response.data } });
           } else {
