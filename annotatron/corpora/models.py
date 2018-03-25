@@ -15,7 +15,7 @@ class Corpus(models.Model):
         A Corpus is a collection of Assets.
     """
     name = models.TextField(unique=True, null=False)
-    description = models.TextField(null=True)
+    description = models.TextField(blank=True)
 
     class Meta:
         managed = False
