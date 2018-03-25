@@ -120,7 +120,7 @@
 
 <script>
   import HTTP from '../http-common';
-  import EventBus from '../global-bus';
+  import {EventBus} from '../global-bus';
 
   export default {
   name: 'Header',
@@ -129,11 +129,6 @@
       msg: 'Welcome to Your Vue.js App',
       authenticationStatus: '',
     };
-  },
-
-  signOut() {
-    EventBus.$emit('authenticationChanged', {authenticated: 'notAuthenticated'});
-    alert('Signed out');
   },
 
   methods: {
@@ -152,7 +147,7 @@
 
     HTTP.get('v1/control/setup').then((response) => {
       if (response.data.requires_setup) {
-        this.bus.$emit('AuthenticationChange', { authenticated: 'notAuthenticated' });
+        //this.bus.$emit('AuthenticationChange', { authenticated: 'notAuthenticated' });
         this.$router.push({ name: 'InitialSetup' });
       } else {
         const token = localStorage.getItem('Token');
