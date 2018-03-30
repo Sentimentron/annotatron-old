@@ -2,6 +2,12 @@
 # Use of this source code is goverend by the license found in the LICENSE file.
 
 version: "3"
+networks:
+  public-network:
+  isolation-network:
+    # This is used to try and make sure that functron is only
+    # visible to the annotatron-service container
+
 services:
 
   # Postgres database is the primary store for Annotatron
@@ -21,6 +27,8 @@ services:
       POSTGRES_DB: annotatron
       POSTGRES_USER: annotatron
       POSTGRES_PASSWORD: annotatron
+    networks:
+     - isolation-network
 
   nginx-service:
     image: nginx:1.13.9
@@ -34,6 +42,9 @@ services:
       - 80:80
     depends_on:
       - annotatron-service
+    networks: 
+      - public-network
+      - isolation-network
 
   annotatron-service:
     build:
@@ -47,3 +58,17 @@ services:
       - postgres-service
     environment:
       AN_OPENFAAS_URL: ${AN_OPENFAAS_URL}
+    networks:
+      - isolation-network
+   
+  functron-service:
+    image: sentimentron/functron:1.0.0
+    container_name: AN_functron
+    volumes:
+      - /var/run/docker.sock:/tmp/functronvar/run/docker.sock
+      - /tmp/functron:/tmp/functron
+    ports:
+      - 8081:8081
+    networks:
+      - isolation-network
+    

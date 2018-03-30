@@ -1,10 +1,50 @@
 from django.shortcuts import render
 from django.views.generic import TemplateView
 from django.contrib.auth.models import User
-from rest_framework import generics, serializers
+from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, AllowAny
+
+
+class RequiresSetupView(APIView):
+    """
+    This API is called by the front-end code to determine if we need
+    to go through initial configuration.
+    """
+
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        superusers = User.objects.filter(is_superuser=True)
+        return Response({
+            "requires_setup": superusers.count() == 0
+        })
+
+    def post(self, request):
+        allowed = User.objects.filter(is_superuser=True).count() == 0
+        if allowed:
+            serializer = DebugUserSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.create(serializer.validated_data)
+                return Response(status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    "errors": serializer.errors,
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        else:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+
+
+class CheckAuthenticationView(APIView):
+    """
+        Returns the current username, just to check that we're logged in.
+    """
+    permission_classes = (AllowAny,)
+    def get(self, request):
+        return Response({"username": request.user.username,
+                         "is_staff": request.user.is_staff,
+                         "is_superuser": request.user.is_superuser})
 
 
 class DebugUserSerializer(serializers.Serializer):
@@ -12,6 +52,7 @@ class DebugUserSerializer(serializers.Serializer):
         Debug-only serializer which programmatically creates
         new users (intended for unit testing).
     """
+    permission_classes = (AllowAny,)
 
     username = serializers.CharField(required=True)
     email = serializers.CharField(required=True)
@@ -33,7 +74,7 @@ class DebugUserCreateView(generics.ListCreateAPIView):
     """
         This is a debug view which programmatically creates new users.
     """
-
+    permission_classes = (AllowAny,)
     queryset = User.objects.all()
     serializer_class = DebugUserSerializer
 
@@ -42,6 +83,7 @@ class DebugUserDeleteView(APIView):
     """
         Removes any users with "debug-" in front of their name.
     """
+    permission_classes = (AllowAny,)
     def post(self, request):
         User.objects.filter(username__startswith="debug-").delete()
         return Response()
@@ -56,7 +98,7 @@ class DebugSayHelloAPIView(APIView):
     """
         Used to check that authentication is working.
     """
-    permission_classes = (IsAdminUser,)
+    permission_classes = (AllowAny,)
 
     def post(self, request):
         return Response({"hello": "world"})
