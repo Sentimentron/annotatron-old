@@ -41,6 +41,7 @@
         // Called if authentication is successful
         const token = response.data.token;
 
+        // Store the login token and stuff
         localStorage.setItem('Token', token);
         HTTP.defaults.headers.common['Authorization'] = "Token " + token;
         this.$Progress.set(70);

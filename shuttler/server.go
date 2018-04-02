@@ -7,10 +7,16 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"sync"
 )
 
 var addr = flag.String("addr", "localhost:10000", "HTTP Listening Address")
 var upgrader = websocket.Upgrader{}
+
+var connectionMapLock sync.Mutex // Synchronizes access to the connectionMap
+var connectionMapId int          // Current insert point
+var connectionMap map[int]*websocket.Conn
+var connectionTokenMap map[int]string // Stores which connections belong to which users
 
 // Message is the generic message type
 type Message struct {
@@ -80,7 +86,7 @@ func WriteMessageToSocket(response interface{}, conn *websocket.Conn, responseTy
 	return err
 }
 
-func HandleAuthenticationMessage(contents map[string]interface{}, conn *websocket.Conn) (interface{}, error) {
+func HandleAuthenticationMessage(contents map[string]interface{}, conn *websocket.Conn) (interface{}, int, error) {
 	var parsedMessage AuthenticationClientServerMessage
 	err := ReinterpretMessage(contents, &parsedMessage)
 
@@ -91,14 +97,57 @@ func HandleAuthenticationMessage(contents map[string]interface{}, conn *websocke
 	}
 
 	if err != nil {
-		return response, err
+		return response, 0, err
 	}
 
 	// TODO: have to associate the connection with the token
 	// TODO: connect to Annotatron backend
-	// TODO: check the v1/hello API to validate
-	// TODO: return
-	return response, nil
+
+	// Create a HTTP client and ping the check authentication method
+	client := &http.Client{
+		CheckRedirect: nil,
+	}
+	req, err := http.NewRequest("POST", "http://annotatron-service/v1/control/hello", nil)
+	if err != nil {
+		return response, 0, err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Token %s", parsedMessage.Token))
+	resp, err := client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		return response, 0, err
+	}
+
+	// If successful (i.e. 200 status), stash the connection
+	if resp.StatusCode == 200 {
+		connectionId := RegisterConnection(conn, parsedMessage.Token)
+		response.Successful = true
+		return response, connectionId, nil
+	}
+
+	return response, 0, fmt.Errorf("status code was %d (expected 200)", resp.StatusCode)
+}
+
+// RegisterConnection adds the socket so that it can receive broadcast messages.
+func RegisterConnection(c *websocket.Conn, token string) int {
+	connectionMapLock.Lock()
+	defer connectionMapLock.Unlock()
+	connectionMapId += 1
+	connectionMap[connectionMapId] = c
+	connectionTokenMap[connectionMapId] = token
+	return connectionMapId
+}
+
+// DeregisterAndCloseConnection removes the connection from the connectionMap (if it exists)
+// and also closes the connection.
+func DeregisterAndCloseConnection(c *websocket.Conn, connectionId *int) {
+	if _, ok := connectionMap[*connectionId]; ok {
+		connectionMapLock.Lock()
+		defer connectionMapLock.Unlock()
+		delete(connectionMap, *connectionId)
+		delete(connectionTokenMap, *connectionId)
+	}
+	c.Close()
 }
 
 // ClientWithServerMessageHandler handles the frontend connection - the Vue.JS app
@@ -111,7 +160,8 @@ func ClientWithServerMessageHandler(w http.ResponseWriter, r *http.Request) {
 		log.Print("Failed to upgrade HTTP connection: ", err)
 		return
 	}
-	defer c.Close()
+	connectionId := 0 // Deliberately set to something that's not in the connectionMap
+	defer DeregisterAndCloseConnection(c, &connectionId)
 	for {
 		// Read the raw bytes from the socket
 		mt, message, err := c.ReadMessage()
@@ -134,7 +184,7 @@ func ClientWithServerMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 		switch kind := parsedMessage.Kind; kind {
 		case "authentication":
-			response, err = HandleAuthenticationMessage(parsedMessage.Contents)
+			response, connectionId, err = HandleAuthenticationMessage(parsedMessage.Contents, c)
 		default:
 			unhandled.Kind = parsedMessage.Kind
 			response = unhandled
@@ -158,8 +208,12 @@ func ClientWithServerMessageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// Start the front-end and back-end servers
 
+	// Create a map of sockets connected to this system, used for server broadcasts
+	connectionMap = make(map[int]*websocket.Conn)
+	connectionTokenMap = make(map[int]string)
+
+	// Start the front-end and back-end servers
 	frontEndMux := http.NewServeMux()
 	frontEndMux.Handle("/ws", ClientWithServerMessageHandler)
 

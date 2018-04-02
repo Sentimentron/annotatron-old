@@ -128,6 +128,9 @@
     return {
       msg: 'Welcome to Your Vue.js App',
       authenticationStatus: '',
+      // This is a WebSocket connection that can be used to push events from
+      // the server to the client.
+      backgroundConnection: null,
     };
   },
 
@@ -143,6 +146,7 @@
     // Make sure that we show the right sign-in, sign-out buttons.
     EventBus.$on('authenticationChanged', (data) => {
       this.authenticationStatus = data.authenticated;
+
     });
 
     HTTP.get('v1/control/setup').then((response) => {
