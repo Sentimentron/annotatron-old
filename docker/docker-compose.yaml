@@ -16,6 +16,8 @@ services:
     container_name: AN_postgres
     ports:
       - 5432:5432
+    expose:
+      - 5432
     volumes:
       # This file is executed on startup
       # - ./postgres/files/db.sql:/docker-entrypoint-initdb.d/init-user-db.sql
@@ -42,7 +44,7 @@ services:
       - 80:80
     depends_on:
       - annotatron-service
-    networks: 
+    networks:
       - public-network
       - isolation-network
 
@@ -60,7 +62,7 @@ services:
       AN_OPENFAAS_URL: ${AN_OPENFAAS_URL}
     networks:
       - isolation-network
-   
+
   functron-service:
     image: sentimentron/functron:1.0.0
     container_name: AN_functron
@@ -71,4 +73,4 @@ services:
       - 8081:8081
     networks:
       - isolation-network
-    
+
