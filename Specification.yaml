@@ -1,0 +1,1455 @@
+openapi: 3.0.0
+info:
+  title: Annotatron
+  description: Annotatron describes, displays, processes, visualizes, and allows humans to annotate machine learning corpora.
+  version: 0.1.0
+
+servers:
+  - url: http://api.example.com/v1
+    description: Optional server description, e.g. Main (production) server
+  - url: http://staging-api.example.com
+    description: Optional server description, e.g. Internal staging server for testing
+
+tags:
+  - name: annotation
+    description: >-
+      Annotations are what we're trying to derive from Annotatron.
+  - name: assignment
+    description: >-
+      `Assignments` are `Question`s about `Asset`s delivered to humans, and approved by `Reviewer`.
+  - name: question
+    description: >-
+      `Question`s in Annotatron are prompts given to a human. Humans give the response, and it's recorded for later aggreation. Typically,
+      multiple Annotators will respond and the resulting Annotation will be summarized for export.
+  - name: corpus
+    description: >-
+      `Asset`s are stored in `Corpus` collections, which are used to organize datasets for annotation and training.
+      Corpora collect and organize Assets to create a dataset used for annotation and training.
+  - name: asset
+    description: >-
+
+      `Asset`s are indivisable, immutable pieces of content which you can annotate as part of a corpus.
+
+
+      Each `Asset` can be part of more than one corpus, for example a database of photos can be annotated
+      with age in one `Corpus`, and expression in another.
+  - name: auth
+    description: >-
+      This tag collects API methods which are used for authentication, authorization, and anything to do with logging in, logging out, general security stuff.
+  - name: conf
+    description: >-
+      This tag collects endpoints which are used to control the system.
+
+paths:
+
+  /conf/initialUser:
+    get:
+      tags:
+        - conf
+      description: >-
+        Checks whether this Annotatron instances requires initial set-up or not. Returns false if everything's normal. No Authorization is needed.
+      operationId: checkNeedsSetup
+      responses:
+        200:
+          description: Successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigurationResponse"
+        402:
+          description: Internal error
+
+    post:
+      operationId: createInitialUser
+      tags:
+        - conf
+        - auth
+      description: >-
+        Creates the initial, primary user that will administer the system.
+
+        * The `role` field will be automatically set to `Administrator`.
+
+        No authorization key is needed.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewUserRequest'
+      responses:
+        200:
+          description: "Successful."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  /annotation:
+    post:
+      operationId: createAnnotation
+      tags:
+        - annotation
+      description: >-
+        Validates and creates a new `Annotation`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Annotation"
+      responses:
+        201:
+          description: "Created"
+        422:
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /annotation/validate:
+    post:
+      operationId: validateAnnotation
+      tags:
+        - annotation
+      description: >-
+        Validates an `Annotation`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Annotation"
+      responses:
+        202:
+          description: "No validation messages"
+        422:
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /annotation/{annotationId}:
+    delete:
+      operationId: deleteAnnotation
+      tags:
+        - annotation
+      description: >-
+        Removes an `Annotation`
+      parameters:
+        - name: annotationId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      responses:
+        202:
+          description: Removed
+    get:
+      operationId: getAnnotation
+      tags:
+        - annotation
+      description: Retrieves an `Annotation`
+      parameters:
+        - name: annotationId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+
+  /auth/token:
+
+    delete:
+      operationId: deleteAuthToken
+      tags:
+        - auth
+      description: >-
+        Signs the current user out.
+      responses:
+        202:
+          description: "Deleted"
+
+    post:
+      operationId: createAuthToken
+      tags:
+        - auth
+      description: >-
+        Logs the active `User` in (if possible), and returns an authentication token.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        200:
+          description: "Successful."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        403:
+          description: "Login unsuccessful."
+
+  /auth/whoAmI:
+    get:
+      tags:
+        - auth
+      operationId: checkAuthToken
+      description: >-
+        Returns an object with the currently-signed in User details.
+      responses:
+        200:
+          description: "Successful."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+
+  /auth/users:
+    get:
+      tags:
+        - auth
+      operationId: listUsers
+      description: >-
+        Lists all available users. Can be done by a `Staff`.
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags:
+        - conf
+        - auth
+      description: >-
+        Creates a new user. This can only be done by an `Administrator`.
+      requestBody:
+        content:
+            application/json:
+             schema:
+              $ref: '#/components/schemas/NewUserRequest'
+
+      responses:
+        201:
+          description: "Successful."
+
+  /assignment:
+    post:
+      operationId: createAssignment
+      tags:
+        - assignment
+      description: >-
+        Adds an `Assignment` to Annotatron, which links a `Question` about an `Asset` in a given `Corpus` to a `User`
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Assignment'
+      responses:
+        201:
+          description: "Successful"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessfulInsert'
+
+  /assignment/{assignmentId}/submit:
+    put:
+      tags:
+        - assignment
+      operationId: submitAssignment
+      description: >-
+        When called by an `Annotator` with the `submit` keyword, this records the response of the assignment.
+      parameters:
+        - name: assignmentId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Assignment'
+      responses:
+        204:
+          description: "Updated successfully"
+        422:
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /assignment/validate:
+    post:
+      tags:
+        - assignment
+      description: >-
+        Checks that an `Assignment` meets all the requirements.
+      operationId: validateAssignment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Assignment'
+      responses:
+        202:
+          description: "No errors"
+        422:
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /assignment/{assignmentId}/approve:
+    put:
+      tags:
+        - assignment
+      description: >-
+        When called by an `Reviewer`, this records the response of the assignment.
+      operationId: approveAssignment
+      parameters:
+        - name: assignmentId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Assignment'
+      responses:
+        204:
+          description: "Updated successfully"
+        422:
+          description: "Validation error"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /assignment/{assignmentId}:
+    get:
+      operationId: getAssignment
+      tags:
+        - assignment
+      description: >-
+        Retrieve the details of an `Assignment`.
+      parameters:
+        - name: assignmentId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      responses:
+        200:
+          description: "Successful."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+    delete:
+      tags:
+        - assignment
+      operationId: deleteAssignment
+      parameters:
+        - name: assignmentId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+        - name: force
+          in: query
+          schema:
+            type: boolean
+      responses:
+        202:
+          description: "Successfully deleted"
+        422:
+          description: >-
+            May cause data loss if deleted. Set `?force=true`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataLossReason'
+
+
+  /assignment/byUser/{userId}:
+    get:
+      tags:
+        - assignment
+      operationId: listAssignmentsByUser
+      description: >-
+        Retrieve the `Assignments` assigned to a user.
+      parameters:
+        - name: userId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      responses:
+        200:
+          description: "Available assignments."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+
+  /assignment/byAssetAndCorpus/{corpusId}/{assetId}:
+    get:
+      tags:
+        - assignment
+      operationId: listAssignmentsByAssetAndCorpus
+      description: >-
+        Retrieve the `Assignments` assigned to a user.
+      parameters:
+        - name: corpusId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+        - name: assetId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+      responses:
+        200:
+          description: "Available assignments."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+
+  /asset:
+      post:
+        tags:
+          - asset
+        operationId: createAsset
+        description: >-
+          Inserts an `Asset` into Annotatron. No de-duplication is provided (use the `HEAD` method to check.) The `id` field is ignored.
+        requestBody:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BinaryAssetUpload'
+        responses:
+          '201':
+            description: Successfully created
+
+  /asset/{id}:
+    delete:
+      tags:
+        - asset
+      summary: Delete an Asset from the database
+      operationId: deleteAssetWithId
+      description: >-
+        Deletes an asset, if possible, from Annotatron's database.
+
+        * The Asset will only be deleted if it's not referenced by any Corpus objects.
+
+        * The Asset's metadata and content may persist in storage, but will not be accessible.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: The `id` of the `Asset` to delete.
+      responses:
+        202:
+          description: Successfully deleted.
+        422:
+          description: Can't delete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataLossReason'
+    get:
+      tags:
+        - asset
+      summary: Retrieve information about an Asset
+      operationId: getAssetInfoWithId
+      description: >-
+        Retrieves some metadata about the Asset, such as when it was uploaded.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The identifier of the asset to retrieve.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Asset details successfully retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BinaryAssetDescription'
+
+  /asset/{id}/content:
+    get:
+      tags:
+        - asset
+      operationId: getAssetContentWithId
+      description: >-
+        Retrieves the bytes that make up an `Asset`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The identifier of the asset to retrieve.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Asset content successfully retrieved.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /asset/match:
+    post:
+      description: >-
+        Attempts to find an `Asset` that matches some of the fields specified
+        in the request body. It returns a list of identifiers referring to `Asset`s where anything matches. These can be checked against the `/asset/{id}` response.
+      tags:
+        - asset
+      operationId: matchAssetFromPartialUpload
+      requestBody:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BinaryAssetDescription'
+      responses:
+        200:
+          description: "Some `Assets` matched the query."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+
+  /corpus/{corpusId}/{assetId}/questions:
+    post:
+      operationId: attachQuestionToAssetInCorpus
+      tags:
+        - corpus
+        - question
+      description: >-
+        Attaches a `Question` object to a an `Asset` in a `Corpus` for human
+        annotation.
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+        - name: assetId
+          in: path
+          required: true
+          description: The identifier of the `Asset` to add.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: integer
+              format: int64
+      responses:
+        201:
+          description: "Successfully created."
+    get:
+      operationId: retrieveQuestionFromAssetInCorpus
+      tags:
+        - corpus
+        - question
+      description: >-
+        This retrieves a list of identifiers which map to `Questions` via the `questions/{id}` endpoint.
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+        - name: assetId
+          in: path
+          required: true
+          description: The identifier of the `Asset` to add.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: A list of question identifiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+
+  /corpus/{corpusId}/{assetId}:
+    delete:
+      tags:
+        - asset
+        - corpus
+      operationId: unlinkAssetWithCorpus
+      description: Removes an `Asset` from a `Corpus`
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+        - name: assetId
+          in: path
+          required: true
+          description: The identifier of the `Asset` to add.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        202:
+          description: Link deleted.
+        422:
+          description: Link could not be delete due to possible data loss.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataLossReason'
+    post:
+      tags:
+        - asset
+        - corpus
+      operationId: linkAssetWithCorpus
+      description: Links an `Asset` with a `Corpus`
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+        - name: assetId
+          in: path
+          required: true
+          description: The identifier of the `Asset` to add.
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetCorpusLink'
+      responses:
+        201:
+          description: Link successfully generated.
+
+  /corpus/{corpusId}:
+    get:
+      tags:
+        - corpus
+      operationId: getCorpusById
+      description: >-
+        Retrieves details about a Corpus
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Corpus"
+
+  /corpus/{corpusId}/assets:
+    get:
+      tags:
+        - corpus
+        - asset
+      operationId: getAssetsByCorpusId
+      description: >-
+        Retrieves the `Asset`s that make up a `Corpus`
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Corpus"
+
+
+  /corpus:
+    get:
+      tags:
+        - corpus
+      description: >-
+        Retrieves a list of identifiers that correspond to current `Corpus` objects.
+        These can be resolved into Corpus objects later via the `/corpus/{id}` endpoint.
+
+      operationId: listAllCorpora
+      parameters:
+        - name: name
+          schema:
+            type: string
+          in: query
+          description: "Partially match corpora which contain this name."
+      responses:
+        200:
+          description: A JSON array of user names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+
+    post:
+      tags:
+        - corpus
+      description: >-
+        Adds a new `Corpus` to the database.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Corpus'
+      responses:
+        201:
+          description: "Successfully created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessfulInsert"
+
+  /question:
+    post:
+      tags:
+        - question
+      operationId: createQuestion
+      description: >-
+        Inserts a `Question` into Annotatron.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/MultipleChoiceQuestion"
+                - $ref: "#/components/schemas/TimeSeriesRangeQuestion"
+                - $ref: "#/components/schemas/TimeSeriesSegmentationQuestion"
+              discriminator:
+                propertyName: kind
+      responses:
+        201:
+          description: "Successfully inserted."
+  /question/{id}:
+    get:
+      tags:
+        - question
+      operationId: getQuestion
+      description: >-
+        Retrieves a `Question` from Annotatron.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The identifier of the `Question` to retrieve
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "Successfully found."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+
+components:
+  securitySchemes:
+    bearerAuth:            # arbitrary name for the security scheme
+      type: http
+      scheme: bearer
+  schemas:
+
+    AbstractAnnotation:
+      type: object
+      required:
+        - kind
+        - source
+        - summaryCode
+      properties:
+        created:
+          type: string
+          format: datetime
+        kind:
+          type: string
+          enum:
+            - TimeSeriesSegmentationAnnotation
+            - TimeSeriesRangeAnnotation
+            - MultipleChoiceAnnotation
+            - GenericJSONAnnotation
+            - TextAnnotation
+        source:
+          type: string
+          enum:
+            - Reference
+            - SystemGenerated
+            - Human
+            - Aggregated
+        summaryCode:
+          type: string
+
+
+    AbstractQuestion:
+      type: object
+      required:
+        - humanPrompt
+        - kind
+        - summaryCode
+        - created
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Ignored on upload.
+        summaryCode:
+          type: string
+          description: >-
+            This is a short string which is used by Annotatron to group responses for a given Asset, often from different Annotators.
+          example: TRANSCRIPT
+        humanPrompt:
+          type: string
+          description: >-
+            This is the text presented to the user, e.g. if this field is set to
+              > Is this transcription accurate?
+            Then that is what will be presented to the user
+          example: "Select all the animals in this picture."
+        created:
+          type: string
+          format: datetime
+        detailedAnnotationInstructions:
+          description: >-
+            Contains detailed annotation instructions, in CommonMark format.
+          type: string
+        annotationInstructions:
+          description: >-
+            Contains head-line annotation instructions, in CommonMark format.
+          type: string
+        kind:
+          description: >-
+            This must be set to the type of `Question` that this is.
+
+            Valid values are:
+              * `TimeSeriesSegmentationQuestion`
+              * `TimeSeriesRangeQuestion`
+              * `MultipleChoiceQuestion`
+          type: string
+
+    Annotation:
+      oneOf:
+        - $ref: "#/components/schemas/TimeSeriesSegmentationAnnotation"
+        - $ref: "#/components/schemas/TimeSeriesRangeAnnotation"
+        - $ref: "#/components/schemas/GenericJSONAnnotation"
+        - $ref: "#/components/schemas/MultipleChoiceAnnotation"
+        - $ref: "#/components/schemas/TextAnnotation"
+      discriminator:
+        propertyName: kind
+      required:
+        - kind
+        - source
+      example:
+        kind: "TimeSeriesSegmentationAnnotation"
+        source: "Human"
+        segments:
+          - 0.1
+          - 0.3
+          - 0.7
+        annotations:
+          - "click"
+          - "click"
+          - "rattle"
+
+    AssetCorpusLink:
+      type: object
+      required:
+        - uniqueName
+        - assetId
+        - corpusId
+      description: >-
+        Represents a link between an `Asset` and a `Corpus`.
+        `assetId` and `corpusId` are not mandatory on upload.
+      properties:
+        uniqueName:
+          type: string
+          description: User-provided name that uniquely identifies this Asset in the target corpus.
+        assetId:
+          type: integer
+          format: int64
+        corpusId:
+          type: integer
+          format: int64
+
+    Assignment:
+      required:
+        - userId
+        - questionId
+        - reviewerId
+        - created
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+          description: "The user who will complete this task"
+        questionId:
+          type: integer
+          format: int64
+          description: The question this user will complete.
+        assignedReviewerId:
+          type: integer
+          format: int64
+          description: >-
+            Who will review this `Assignment`. If unset, or set to 0,
+            the assignment will be automatically approved.
+        actualReviewerId:
+          type: integer
+          format: int64
+          description: >-
+            Contains the UserId of the person who actually reviewed the task.
+        created:
+          type: string
+          format: datetime
+        completed:
+          type: string
+          format: datetime
+          description: >-
+            Contains the date that the `Assignment` was completed.
+        reviewed:
+          type: string
+          format: datetime
+          description: >-
+            Contains the date that the `Assignment` was reviewed.
+        annotatorNotes:
+          type: string
+        reviewerNotes:
+          type: string
+        originalAnnotationId:
+          type: integer
+          format: int64
+        correctedAnnotationId:
+          type: integer
+          format: int64
+
+    BinaryAssetDescription:
+      title: BinaryAsset
+      type: object
+      description: >-
+        An `Asset` is an indivisable blob of data that can be annotated.
+      required:
+        - copyrightAndUsageRestrictions
+        - checksum
+        - mimeType
+        - typeDescription
+        - content
+        - userIdWhoUploaded
+        - dateUploaded
+        - id
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Ignored on upload.
+        userIdWhoUploaded:
+          type: integer
+          format: int64
+          description: Ignored on upload.
+          default: 0
+        content:
+          type: string
+          description: Base64-encoded byte array that makes up the `Asset`.
+        metadata:
+          type: object
+          description: User-provided metadata to identify this object.
+        dateUploaded:
+          type: string
+          format: dateTime
+          description: When this asset was uploaded. Ignored on upload.
+          default: now
+        copyrightAndUsageRestrictions:
+          type: string
+          description: Contains user-provided information about Copyright, source, and redistribution.
+        checksum:
+          type: string
+          format: base64
+          description: Contains a SHA512 sum which verifies the binary content of this Asset.
+        mimeType:
+          type: string
+          description: Detected mimetype for this object.
+        typeDescription:
+          type: string
+          description: Hint for validation and display
+          enum:
+            - UTF8Text
+            - Audio
+            - Image
+            - Video
+            - Other
+
+    BinaryAssetUpload:
+      allOf:
+        - $ref: "#/components/schemas/BinaryAssetDescription"
+        - type: object
+          properties:
+            content:
+              type: string
+              description: Base64-encoded byte array that makes up the `Asset`.
+
+    ConfigurationResponse:
+      type: object
+      description: >-
+        Contains information about whether Annotatron needs further
+        configuration to start working.
+      required:
+        - requiresSetup
+      properties:
+        requiresSetup:
+          type: boolean
+          description: >-
+            If true, Annotatron needs additional setup steps.
+
+    Corpus:
+      title: Corpus
+      type: object
+      required:
+        - name
+        - dateCreated
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Ignored on upload.
+        name:
+          type: string
+          description: Unique name identifying this corpus
+        description:
+          type: string
+          description: Human-readable description of what's in this corpus.
+        created:
+          type: string
+          format: dateTime
+          description: When this corpus was created.
+        copyrightAndUsageRestrictions:
+          type: string
+          description: Human-readable copyright and usage restrictions.
+      example:
+        name: "VCTK"
+        description: "Multi-speaker collection of short sentences."
+        dateCreated: "2012-04-23T18:25:43.511Z"
+        copyrightAndUsageRestrictions: >-
+          This corpus is licensed under Open Data Commons Attribution License (ODC-By) v1.0.
+            http://opendatacommons.org/licenses/by/1.0/
+            http://opendatacommons.org/licenses/by/summary/
+
+            http://homepages.inf.ed.ac.uk/jyamagis/page3/page58/page58.html
+
+    DataLossReason:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - AssetStillLinkedToCorpus
+            - AssetContainsAnnotationsInCorpus
+            - QuestionHasAnnotations
+
+    FieldError:
+      type: object
+      required:
+        - name
+        - error
+        - warning
+      properties:
+        name:
+          type: string
+        error:
+          type: string
+        warning:
+          type: boolean
+          description: >-
+            If true, then this validation message is a warning, meaning that it will be accepted by Annotatron if the present user is supposed to be reviewing this annotation. It's normally used to indicate policy violations, rather than integrity errors.
+
+    GenericJSONAnnotation:
+      allOf:
+        - $ref: "#/components/schemas/AbstractAnnotation"
+        - type: object
+          required:
+            - kind
+            - content
+          properties:
+            content:
+              type: object
+              description: >-
+                User-provided JSON content
+
+
+    LoginRequest:
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          description: Plain-text password
+      example:
+        username: "admin"
+        password: "S3CretPassw0rd"
+
+    LoginResponse:
+      required:
+        - token
+      properties:
+        token:
+          type: string
+
+    MultipleChoiceQuestion:
+      allOf:
+        - $ref: "#/components/schemas/AbstractQuestion"
+        - title: MultipleChoiceQuestion
+          type: object
+          required:
+            - choices
+            - kind
+          properties:
+            choices:
+              description: >-
+                Describes what the multiple choices are.
+              type: array
+              items:
+                type: string
+              example:
+                - "Cat"
+                - "Dog"
+                - "Mongoose"
+
+    NewUserRequest:
+      required:
+        - username
+        - email
+        - role
+        - password
+      properties:
+        username:
+          type: string
+          description: "The name the `User` will use to login."
+        email:
+          type: string
+          description: "Will be used to send notifications."
+        password:
+          type: string
+        role:
+          type: string
+          enum:
+            - Administrator
+            - Staff
+            - Annotator
+          description: >-
+            "Each role has fewer privileges than the one before."
+
+    Question:
+      oneOf:
+        - $ref: "#/components/schemas/MultipleChoiceQuestion"
+        - $ref: "#/components/schemas/TimeSeriesRangeQuestion"
+        - $ref: "#/components/schemas/TimeSeriesSegmentationQuestion"
+      discriminator:
+        propertyName: kind
+
+    # These are generic return/assignment types
+    SuccessfulInsert:
+      title: SuccesfulInsert
+      type: object
+      required:
+        - insertedId
+      properties:
+        insertedId:
+          type: integer
+          format: int64
+          example: 14
+          description: An identifier which can later retrieve the inserted resource
+
+
+
+    MultipleChoiceAnnotation:
+      allOf:
+        - $ref: "#/components/schemas/AbstractAnnotation"
+        - type: object
+          description: >-
+            Annotation type which captures a `MultipleChoiceQuestion` output.
+          required:
+            - kind
+            - choices
+          properties:
+            choices:
+              type: array
+              items:
+                type: string
+
+    TextAnnotation:
+      allOf:
+        - $ref: "#/components/schemas/AbstractAnnotation"
+        - type: object
+          description: >-
+            Annotation type which contains a free-form text response
+          required:
+            - kind
+            - content
+          properties:
+            content:
+              type: string
+              description: >-
+                Free-form text input
+
+    TimeSeriesRangeAnnotation:
+      allOf:
+        - $ref: "#/components/schemas/AbstractAnnotation"
+        - type: object
+          description: >-
+            Captures the outcome of a `TimeSeriesRangeQuestion`
+          required:
+            - ranges
+            - kind
+          properties:
+            ranges:
+              type: array
+              items:
+                $ref: "#/components/schemas/TimeSeriesRangeTuple"
+          example:
+            ranges:
+              - label: "Hello"
+                start: 0.0
+                end: 0.712
+              - label: "World"
+                start: 0.811
+                end: 1.121
+
+    TimeSeriesRangeQuestion:
+      allOf:
+        - $ref: "#/components/schemas/TimeSeriesSegmentationQuestion"
+        - title: 1DRangeQuestion
+          type: object
+          required:
+            - canOverlap
+            - kind
+          properties:
+            canOverlap:
+              description: >-
+                If True, the user can create overlapping segments.
+              type: boolean
+              example: true
+
+    TimeSeriesRangeTuple:
+      type: object
+      description: >-
+        Used to demarcate start/end sections for a 1D audio file.
+      required:
+        - label
+        - start
+        - end
+      properties:
+        label:
+          type: string
+          example: "Hello"
+        start:
+          type: number
+          example: 0.0
+        end:
+          type: number
+          example: 0.7
+
+    TimeSeriesSegmentationAnnotation:
+      allOf:
+        - $ref: "#/components/schemas/AbstractAnnotation"
+        - type: object
+          description: >-
+            This object captures the outcome of a `TimeSeriesSegmentationQuestion`.
+          required:
+            - segments
+            - annotations
+            - kind
+          properties:
+            segments:
+              description: >-
+                Flat-list of timestamps.
+              type: array
+              items:
+                type: number
+              example:
+                0.0
+                0.712
+
+            annotations:
+              description: >-
+                List of strings which contain the annotation information.
+              type: array
+              items:
+                type: string
+              example:
+                - "Hello"
+                - "World"
+
+    TimeSeriesSegmentationQuestion:
+      allOf:
+        - $ref: "#/components/schemas/AbstractQuestion"
+        - title: 1DSegmentationQuestion
+          type: object
+          required:
+            - kind
+          example:
+            created: 2012-04-23T18:25:43.511Z
+            summaryCode: WORDS
+            humanPrompt: Divide this file into words
+            kind: "TimeSeriesSegmentationQuestion"
+            maximumSegments: 5
+            minimumSegments: 2
+            segmentChoices:
+              - "hi"
+              - "world"
+            freeFormAllowed: true
+            annotationInstructions: >-
+              Click between each word.
+            detailedAnnotationInstructions: >-
+              * If word grouping is unclear, click around the unclear section and enter WORD1-...-WORDN in the freeform area.
+
+          properties:
+            maximumSegments:
+              description: >-
+                Describes the maximum number of segments that the `Annotator` is allowed to create. If unset, this is unrestricted.
+              type: integer
+              example: 5
+
+            minimumSegments:
+              description: >-
+                Describes the minimum number of segments that the `Annotator` can create. If unset, this is zero.
+              type: integer
+              example: 0
+
+            segmentChoices:
+              description: >-
+                If set, this field forces the user to further annotate the segments from the options in this field
+              type: array
+              items:
+                type: string
+              example:
+                - "Cat"
+                - "Dog"
+                - "Mongoose"
+
+            freeFormAllowed:
+              description: >-
+                If set to `true`, this field allows the user to specify
+                a different response from that allowed by `segmentChoices`
+              type: boolean
+              example: true
+
+    #
+    # This section describes Authentication objects.
+    #
+
+
+    User:
+      required:
+        - username
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier
+        username:
+          type: string
+          description: "The name that the `User` will use."
+        created:
+          type: string
+          format: datetime
+        role:
+          type: string
+          enum:
+            - Administrator
+            - Staff
+            - Reviewer
+            - Annotator
+
+
+    ValidationError:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+security:
+  - bearerAuth: []
