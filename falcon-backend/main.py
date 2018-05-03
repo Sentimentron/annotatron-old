@@ -2,10 +2,12 @@ import falcon
 
 from datetime import datetime, timedelta
 
-from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, LoginResponse
+from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, LoginResponse, AnnotatronUser, UserKind
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Binary, Enum, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
+
+from Crypto.Cipher import ARC4
 
 from wsgiref import simple_server
 import json
@@ -18,6 +20,7 @@ import bcrypt
 
 Base = declarative_base()
 Session = sessionmaker()
+
 
 class User(Base):
     __tablename__ = "an_users"
@@ -132,6 +135,17 @@ class UserController:
         rq.role = "Administrator"
         return self._create_user(rq)
 
+class CurrentUserResource:
+
+    def on_get(self, req, resp): #getWhoIAm
+        if not req.user:
+            resp.status = falcon.HTTP_202
+            return resp
+
+        user = AnnotatronUser(username=req.user.username, role=UserKind(req.user.role),
+                    created=req.user.created, id=req.obfuscate_int64_field(req.user.id),
+                    email=req.user.email, password=None)
+        resp.media = user
 
 class InitialUserResource:
 
@@ -192,6 +206,23 @@ class GetSessionTokenComponent:
 
             t = TokenController(req.session)
             req.user = t.get_user_from_token(auth)
+
+class ObfuscationComponent:
+
+    def process_request(self, req, resp):
+        # TODO: make me an environmnent variable
+        def obfuscate_int64_field(x):
+            cipher = ARC4.new("habppootle")
+            cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
+            return int.from_bytes(cipher.encrypt((x).to_bytes(8, byteorder='big')), 'big')
+
+        def recover_int64_field(x):
+            cipher = ARC4.new("habppootle")
+            cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
+            return int.from_bytes(cipher.decrypt(x), byteorder='big')
+
+        req.obfuscate_int64_field = obfuscate_int64_field
+        req.recover_int64_field = recover_int64_field
 
 
 class AttachSessionComponent:
