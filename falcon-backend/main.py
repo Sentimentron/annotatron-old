@@ -1,5 +1,7 @@
 import falcon
 
+from datetime import datetime, timedelta
+
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, LoginResponse
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Binary, Enum, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship
@@ -133,6 +135,14 @@ class UserController:
 
 class InitialUserResource:
 
+    """
+    Test:
+        * Empty database, on_get should return "I need configuration."
+        * On post, should accept user response
+        * on_get should no longer return "I need configuration."
+        * on_post should no longer accept new users
+    """
+
     def on_get(self, req, resp): # checkNeedsSetup
         initial = not UserController(req.session).initial_user_created()
         response = ConfigurationResponse(requires_setup=(initial==initial))
@@ -142,7 +152,7 @@ class InitialUserResource:
         resp.status = falcon.HTTP_200
         return resp
 
-    def on_post(self, req, resp):
+    def on_post(self, req, resp): # createInitialUser
         u = UserController(req.session)
         errors = u.create_initial_user(NewUserRequest.from_json(req.body))
         if errors:
@@ -170,6 +180,7 @@ class TokenResource:
             resp.status = '403'
             resp.media = None
         return resp
+
 
 class GetSessionTokenComponent:
     def process_request(self, req, resp):

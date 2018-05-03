@@ -46,6 +46,7 @@ paths:
     get:
       tags:
         - conf
+        - auth
       description: >-
         Checks whether this Annotatron instances requires initial set-up or not. Returns false if everything's normal. No Authorization is needed.
       operationId: checkNeedsSetup
