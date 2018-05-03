@@ -226,7 +226,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
     post:
       operationId: createUser
       tags:
@@ -448,27 +450,39 @@ paths:
                   type: integer
                   format: int64
 
-  /asset:
-      post:
-        tags:
-          - asset
-        operationId: createAsset
-        description: >-
-          Inserts an `Asset` into Annotatron. No de-duplication is provided (use the `HEAD` method to check.) The `id` field is ignored.
-        requestBody:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BinaryAssetUpload'
-        responses:
-          '201':
-            description: Successfully created
-
-  /asset/{id}:
+  /corpus/{corpusId}/assets/{assetId}:
+    put:
+      tags:
+        - asset
+      operationId: createAsset
+      summary: Adds an `Asset` to a `Corpus`
+      description: >-
+        Inserts an `Asset` into Annotatron. No de-duplication is provided (use the `HEAD` method to check.) The `id` field is ignored.
+      parameters:
+      - in: path
+        name: corpusId
+        schema:
+          type: string
+        required: true
+        description: The `id` of the `Corpus` that's being modified.
+      - in: path
+        name: assetId
+        schema:
+          type: string
+        required: true
+        description: The id of the `Asset` that's being deleted.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BinaryAssetUpload'
+      responses:
+        '201':
+          description: Successfully created
     delete:
       tags:
         - asset
-      summary: Delete an Asset from the database
+      summary: Deletes an `Asset` from a `Corpus`.
       operationId: deleteAssetWithId
       description: >-
         Deletes an asset, if possible, from Annotatron's database.
@@ -478,12 +492,17 @@ paths:
         * The Asset's metadata and content may persist in storage, but will not be accessible.
       parameters:
         - in: path
-          name: id
+          name: corpusId
           schema:
-            type: integer
-            format: int64
+            type: string
           required: true
-          description: The `id` of the `Asset` to delete.
+          description: The `id` of the `Corpus` that's being modified.
+        - in: path
+          name: assetId
+          schema:
+            type: string
+          required: true
+          description: The id of the `Asset` that's being deleted.
       responses:
         202:
           description: Successfully deleted.
@@ -501,13 +520,18 @@ paths:
       description: >-
         Retrieves some metadata about the Asset, such as when it was uploaded.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The identifier of the asset to retrieve.
+        - in: path
+          name: corpusId
           schema:
-            type: integer
-            format: int64
+            type: string
+          required: true
+          description: The `id` of the `Corpus` that's being modified.
+        - in: path
+          name: assetId
+          schema:
+            type: string
+          required: true
+          description: The id of the `Asset` that's being deleted.
       responses:
         200:
           description: Asset details successfully retrieved.
@@ -516,7 +540,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/BinaryAssetDescription'
 
-  /asset/{id}/content:
+  /corpus/{corpusId}/assets/{assetId}/content:
     get:
       tags:
         - asset
@@ -524,13 +548,18 @@ paths:
       description: >-
         Retrieves the bytes that make up an `Asset`.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: The identifier of the asset to retrieve.
+        - in: path
+          name: corpusId
           schema:
-            type: integer
-            format: int64
+            type: string
+          required: true
+          description: The `id` of the `Corpus` that's being modified.
+        - in: path
+          name: assetId
+          schema:
+            type: string
+          required: true
+          description: The id of the `Asset` that's being deleted.
       responses:
         200:
           description: Asset content successfully retrieved.
@@ -540,7 +569,28 @@ paths:
                 type: string
                 format: binary
 
-  /asset/match:
+  /corpus/{corpusId}/assets:
+    get:
+        tags:
+          - corpus
+          - asset
+        operationId: getAssetsByCorpusId
+        description: >-
+          Retrieves the `Asset`s that make up a `Corpus`.
+        parameters:
+          - name: corpusId
+            in: path
+            required: true
+            description: The identifier of the `Corpus` to link with.
+            schema:
+              type: string
+        responses:
+          200:
+            description: Successful response
+            content:
+              application/json:
+                schema:
+                  $ref: "#/components/schemas/Corpus"
     post:
       description: >-
         Attempts to find an `Asset` that matches some of the fields specified
@@ -548,6 +598,13 @@ paths:
       tags:
         - asset
       operationId: matchAssetFromPartialUpload
+      parameters:
+          - name: corpusId
+            in: path
+            required: true
+            description: The identifier of the `Corpus` to link with.
+            schema:
+              type: string
       requestBody:
           content:
             application/json:
@@ -564,11 +621,10 @@ paths:
                   type: integer
                   format: int64
 
-  /corpus/{corpusId}/{assetId}/questions:
-    post:
+  /corpus/{corpusId}/{assetId}/{summaryId}:
+    put:
       operationId: attachQuestionToAssetInCorpus
       tags:
-        - corpus
         - question
       description: >-
         Attaches a `Question` object to a an `Asset` in a `Corpus` for human
@@ -579,28 +635,30 @@ paths:
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
-            type: integer
-            format: int64
+            type: string
         - name: assetId
           in: path
           required: true
           description: The identifier of the `Asset` to add.
           schema:
-            type: integer
-            format: int64
+            type: string
+        - name: summaryId
+          in: path
+          required: true
+          description: Summary code to aggregate answers to this `Question`
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              type: integer
-              format: int64
+              $ref: "#/components/schemas/Question"
       responses:
         201:
           description: "Successfully created."
     get:
       operationId: retrieveQuestionFromAssetInCorpus
       tags:
-        - corpus
         - question
       description: >-
         This retrieves a list of identifiers which map to `Questions` via the `questions/{id}` endpoint.
@@ -610,25 +668,26 @@ paths:
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
-            type: integer
-            format: int64
+            type: string
         - name: assetId
           in: path
           required: true
           description: The identifier of the `Asset` to add.
           schema:
-            type: integer
-            format: int64
+            type: string
+        - name: summaryId
+          in: path
+          required: true
+          description: Summary code to aggregate answers to this `Question`
+          schema:
+            type: string
       responses:
         200:
           description: A list of question identifiers
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: integer
-                  format: int64
+                $ref: "#/components/schemas/Question"
 
   /corpus/{corpusId}/{assetId}:
     delete:
@@ -713,32 +772,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Corpus"
-
-  /corpus/{corpusId}/assets:
-    get:
-      tags:
-        - corpus
-        - asset
-      operationId: getAssetsByCorpusId
-      description: >-
-        Retrieves the `Asset`s that make up a `Corpus`
-      parameters:
-        - name: corpusId
-          in: path
-          required: true
-          description: The identifier of the `Corpus` to link with.
-          schema:
-            type: integer
-            format: int64
-      responses:
-        200:
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Corpus"
-
-
   /corpus:
     get:
       tags:
@@ -1218,6 +1251,7 @@ components:
             - Administrator
             - Staff
             - Annotator
+            - Reviewer
           description: >-
             "Each role has fewer privileges than the one before."
 

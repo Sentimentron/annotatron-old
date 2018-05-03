@@ -1,13 +1,16 @@
 import falcon
-from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Binary, Enum
-from sqlalchemy.orm import sessionmaker
+from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, LoginResponse
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Binary, Enum, ForeignKey
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 from wsgiref import simple_server
 import json
 import logging
+import random
+import string
+
 import bcrypt
 
 
@@ -22,10 +25,66 @@ class User(Base):
     created = Column(DateTime)
     email = Column(String)
     password = Column(Binary)
-    random_seed = Column(Binary)
     password_last_changed = Column(DateTime)
     role = Column(Enum("Administrator", "Staff", "Reviewer", "Annotator"))
     deactivated_on = Column(DateTime)
+
+    tokens = relationship('Token')
+
+
+class Token(Base):
+    __tablename__ = "an_user_tokens"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('an_users.id'))
+    expires = Column(DateTime)
+    token = Column(String, unique=True)
+
+
+class TokenController:
+
+    def __init__(self, storage: Session):
+        self.storage = storage
+
+    def clean_expired_tokens(self):
+        self.storage.query(Token).filter_by(expires__lt='now').delete()
+
+    def check_token(self, token) -> bool:
+        self.clean_expired_tokens()
+        return self.storage.query(Token).filter_by(expires__gt='now', token=token).count() == 1
+
+    def get_user_from_token(self, token: str) -> User:
+        matches = self.storage.query(Token).filter_by(token=token)
+        if matches.count() > 0:
+            return matches.first()
+
+    def get_token_for_user(self, user: User) -> Token:
+        self.clean_expired_tokens()
+        matches = self.storage.query(Token).filter_by(user=user)
+        if matches.count() > 0:
+            return matches.first()
+
+    def get_or_create_token_for_user(self, user: User) -> Token:
+        token = self.get_token_for_user(user)
+        if not token:
+            return self.issue_token(user)
+        return token
+
+    def issue_token(self, to_user: User) -> Token:
+        key = None
+        while True:
+            with self.storage.transaction() as tx:
+                key = ''.join(random.choice(
+                    string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16)
+                )
+                if self.check_token(key):
+                    continue
+                t = Token(user=to_user, expires=datetime.now() + timedelta(days=7), token=key)
+                t.save()
+                tx.commit()
+                break
+
+        return self.storage.query(Token).get(token=key)
 
 
 class UserController:
@@ -39,8 +98,12 @@ class UserController:
     def initial_user_created(self) -> bool:
         return self.get_administrators().count() > 0
 
-    def _create_password_hash(self, seed, password):
+    def check_credentials(self, lr: LoginRequest) -> bool:
+        user = self.storage.query(User).get(username=lr.username)
+        return bcrypt.checkpw(lr.password, user.password)
 
+    def get_user(self, username: str) -> User:
+        return self.storage.query(User).get(username=username)
 
     def _create_user(self, rq: NewUserRequest) -> ValidationError:
         # Check for obvious issues like missing fields
@@ -62,7 +125,7 @@ class UserController:
 
     def create_initial_user(self, rq) -> ValidationError:
         if self.initial_user_created():
-            return [FieldError("_state", "initial user already created")]
+            return ValidationError([FieldError("_state", "initial user already created")])
 
         rq.role = "Administrator"
         return self._create_user(rq)
@@ -74,9 +137,8 @@ class InitialUserResource:
         initial = not UserController(req.session).initial_user_created()
         response = ConfigurationResponse(requires_setup=(initial==initial))
         resp.content = response
-        print(response)
         print(response.to_json())
-        resp.media = response
+        resp.obj = response
         resp.status = falcon.HTTP_200
         return resp
 
@@ -87,8 +149,38 @@ class InitialUserResource:
             resp.media = errors
             resp.status = falcon.HTTPNotAcceptable
         else:
-            resp.media = None
+            t = TokenController(req.session)
+            token = t.get_token_for_user(u)
+            resp.media = LoginResponse(token=token)
             resp.status = '201'
+        return resp
+
+
+class TokenResource:
+    def on_post(self, req, resp):
+        u = UserController(req.session)
+        t = TokenController(req.session)
+        l = LoginRequest.from_json(req.body)
+
+        if u.check_credentials(l):
+            user = u.get_user(l.username)
+            resp.status = '200'
+            resp.media = LoginResponse(token=t.get_or_create_token_for_user(user))
+        else:
+            resp.status = '403'
+            resp.media = None
+        return resp
+
+class GetSessionTokenComponent:
+    def process_request(self, req, resp):
+        auth = req.auth
+        if auth:
+            method, _, auth = auth.partition(' ')
+            if method != 'Bearer':
+                raise falcon.HTTPNotAcceptable('This API only supports Bearer Authorization')
+
+            t = TokenController(req.session)
+            req.user = t.get_user_from_token(auth)
 
 
 class AttachSessionComponent:
@@ -141,8 +233,9 @@ class JSONTranslatorComponent(object):
                                    'UTF-8.')
 
     def process_response(self, req, resp, resource):
-        logging.info(json.dumps(resp.media.to_json()))
-        resp.body = json.dumps(resp.media.to_json())
+        if resp.obj:
+            logging.info(json.dumps(resp.obj.to_json()))
+            resp.body = json.dumps(resp.obj.to_json())
 
 
 app = falcon.API(middleware=[AttachSessionComponent(), JSONTranslatorComponent()])
