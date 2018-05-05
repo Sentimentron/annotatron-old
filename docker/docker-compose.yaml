@@ -32,6 +32,24 @@ services:
     networks:
      - isolation-network
 
+  postgres-test-service:
+    image: postgres:9.6.8
+    container_name: AN_postgres_test
+    ports:
+      - 5433:5432
+    expose:
+      - 5433
+    volumes:
+      # This file is executed on startup
+      # - ./postgres/files/db.sql:/docker-entrypoint-initdb.d/init-user-db.sql
+      - ./postgres/files/db-test.sql:/docker-entrypoint-startdb.d/init.sql
+      # Custom entrypoint to run database migrations
+      - ./postgres/entrypoint.sh:/docker-entrypoint.sh
+    environment:
+      POSTGRES_DB: annotatron_test
+      POSTGRES_PASSWORD: annotatron
+      POSTGRES_USER: annotatron
+
   nginx-service:
     image: nginx:1.13.9
     container_name: AN_nginx
@@ -58,6 +76,7 @@ services:
       - ./annotatron/entrypoint.sh:/entrypoint.sh
     depends_on:
       - postgres-service
+      - postgres-test-service
     environment:
       AN_OPENFAAS_URL: ${AN_OPENFAAS_URL}
     networks:

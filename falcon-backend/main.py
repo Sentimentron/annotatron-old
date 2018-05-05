@@ -1,49 +1,21 @@
-import falcon
-
-from datetime import datetime, timedelta
-
-from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, LoginResponse, AnnotatronUser, UserKind
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Binary, Enum, ForeignKey
-from sqlalchemy.orm import sessionmaker, relationship
-from sqlalchemy.ext.declarative import declarative_base
-
-from Crypto.Cipher import ARC4
-
-from wsgiref import simple_server
 import json
 import logging
 import random
 import string
+from datetime import datetime, timedelta
+from wsgiref import simple_server
 
 import bcrypt
+import falcon
+from Crypto.Cipher import ARC4
+from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
+    LoginResponse, AnnotatronUser, UserKind
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from models import User, Token
 
-Base = declarative_base()
 Session = sessionmaker()
-
-
-class User(Base):
-    __tablename__ = "an_users"
-
-    id = Column(Integer, primary_key=True)
-    username = Column(String)
-    created = Column(DateTime)
-    email = Column(String)
-    password = Column(Binary)
-    password_last_changed = Column(DateTime)
-    role = Column(Enum("Administrator", "Staff", "Reviewer", "Annotator"))
-    deactivated_on = Column(DateTime)
-
-    tokens = relationship('Token')
-
-
-class Token(Base):
-    __tablename__ = "an_user_tokens"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('an_users.id'))
-    expires = Column(DateTime)
-    token = Column(String, unique=True)
 
 
 class TokenController:
@@ -52,11 +24,11 @@ class TokenController:
         self.storage = storage
 
     def clean_expired_tokens(self):
-        self.storage.query(Token).filter_by(expires__lt='now').delete()
+        self.storage.query(Token).filter(Token.expires < datetime.utcnow()).delete()
 
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
-        return self.storage.query(Token).filter_by(expires__gt='now', token=token).count() == 1
+        return self.storage.query(Token).filter(Token.expires > datetime.utcnow()).filter(token=token).count() == 1
 
     def get_user_from_token(self, token: str) -> User:
         matches = self.storage.query(Token).filter_by(token=token)
@@ -65,7 +37,7 @@ class TokenController:
 
     def get_token_for_user(self, user: User) -> Token:
         self.clean_expired_tokens()
-        matches = self.storage.query(Token).filter_by(user=user)
+        matches = self.storage.query(Token).filter_by(user_id=user.id)
         if matches.count() > 0:
             return matches.first()
 
@@ -101,39 +73,49 @@ class UserController:
         return self.storage.query(User).filter_by(role='Administrator')
 
     def initial_user_created(self) -> bool:
-        return self.get_administrators().count() > 0
+        for user in self.get_administrators():
+            logging.debug(user)
+            return True
+        return False
 
     def check_credentials(self, lr: LoginRequest) -> bool:
-        user = self.storage.query(User).get(username=lr.username)
+        user = self.storage.query(User).filter_by(username=lr.username).first()
         return bcrypt.checkpw(lr.password, user.password)
 
     def get_user(self, username: str) -> User:
-        return self.storage.query(User).get(username=username)
+        return self.storage.query(User).filter_by(username=username).first()
 
     def _create_user(self, rq: NewUserRequest) -> ValidationError:
         # Check for obvious issues like missing fields
-        errors = rq.check_for_problems()
-        if len(errors) > 0:
-            return errors
+        if False:
+            errors = rq.check_for_problems()
+            if len(errors) > 0:
+                return errors
 
         # Encrypt, salt user password
-        password_hash = bcrypt.hashpw(rq.password, bcrypt.gensalt())
+        password_hash = bcrypt.hashpw(rq.password.encode("utf8"), bcrypt.gensalt())
 
         u = User(
             username = rq.username,
             role = rq.role,
-            password = password_hash
+            password = password_hash,
+            email=rq.email
         )
 
         self.storage.add(u)
+        self.storage.commit()
+
+        #self.storage.add(u)
+        #self.storage.commit()
         return None
 
     def create_initial_user(self, rq) -> ValidationError:
         if self.initial_user_created():
-            return ValidationError([FieldError("_state", "initial user already created")])
+            return ValidationError([FieldError("_state", "initial user already created", False)])
 
         rq.role = "Administrator"
         return self._create_user(rq)
+
 
 class CurrentUserResource:
 
@@ -146,6 +128,7 @@ class CurrentUserResource:
                     created=req.user.created, id=req.obfuscate_int64_field(req.user.id),
                     email=req.user.email, password=None)
         resp.media = user
+
 
 class InitialUserResource:
 
@@ -160,27 +143,28 @@ class InitialUserResource:
     def on_get(self, req, resp): # checkNeedsSetup
         initial = not UserController(req.session).initial_user_created()
         response = ConfigurationResponse(requires_setup=(initial==initial))
-        resp.content = response
-        print(response.to_json())
         resp.obj = response
         resp.status = falcon.HTTP_200
         return resp
 
     def on_post(self, req, resp): # createInitialUser
         u = UserController(req.session)
-        errors = u.create_initial_user(NewUserRequest.from_json(req.body))
+        rq = NewUserRequest.from_json(req.body)
+        errors = u.create_initial_user(rq)
         if errors:
-            resp.media = errors
-            resp.status = falcon.HTTPNotAcceptable
+            resp.obj = errors
+            resp.status = falcon.HTTP_403
+            #resp.status = falcon.HTTPNotAcceptable
         else:
             t = TokenController(req.session)
-            token = t.get_token_for_user(u)
-            resp.media = LoginResponse(token=token)
+            token = t.get_token_for_user(u.get_user(rq.username))
+            resp.obj = LoginResponse(token=token)
             resp.status = '201'
         return resp
 
 
 class TokenResource:
+
     def on_post(self, req, resp):
         u = UserController(req.session)
         t = TokenController(req.session)
@@ -189,7 +173,7 @@ class TokenResource:
         if u.check_credentials(l):
             user = u.get_user(l.username)
             resp.status = '200'
-            resp.media = LoginResponse(token=t.get_or_create_token_for_user(user))
+            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user))
         else:
             resp.status = '403'
             resp.media = None
@@ -206,6 +190,7 @@ class GetSessionTokenComponent:
 
             t = TokenController(req.session)
             req.user = t.get_user_from_token(auth)
+
 
 class ObfuscationComponent:
 
@@ -265,7 +250,7 @@ class JSONTranslatorComponent(object):
                                         'A valid JSON document is required.')
 
         try:
-            req.context['doc'] = json.loads(body.decode('utf-8'))
+            req.body = json.loads(body.decode('utf-8'))
 
         except (ValueError, UnicodeDecodeError):
             raise falcon.HTTPError(falcon.HTTP_753,
@@ -275,15 +260,24 @@ class JSONTranslatorComponent(object):
                                    'UTF-8.')
 
     def process_response(self, req, resp, resource):
-        if resp.obj:
-            logging.info(json.dumps(resp.obj.to_json()))
-            resp.body = json.dumps(resp.obj.to_json())
+        try:
+            if resp.obj:
+                logging.info(json.dumps(resp.obj.to_json()))
+                resp.body = json.dumps(resp.obj.to_json())
+        except AttributeError:
+            pass
 
 
-app = falcon.API(middleware=[AttachSessionComponent(), JSONTranslatorComponent()])
-engine = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost/annotatron", echo=True)
-Session.configure(bind=engine)
-app.add_route("/conf/initialUser", InitialUserResource())
+def create_app(engine=None):
+    if not engine:
+        engine = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost/annotatron", echo=True)
+    Session.configure(bind=engine)
+    app = falcon.API(middleware=[AttachSessionComponent(), JSONTranslatorComponent(), RequireJSONComponent(),
+                                 ObfuscationComponent()])
+    app.add_route("/conf/initialUser", InitialUserResource())
+    return app
+
+app = create_app()
 
 if __name__ == '__main__':
     httpd = simple_server.make_server('127.0.0.1', 8000, app)
