@@ -28,7 +28,7 @@ class TokenController:
 
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
-        return self.storage.query(Token).filter(Token.expires > datetime.utcnow()).filter(token=token).count() == 1
+        return self.storage.query(Token).filter(Token.expires > datetime.utcnow()).filter_by(token=token).count() == 1
 
     def get_user_from_token(self, token: str) -> User:
         matches = self.storage.query(Token).filter_by(token=token)
@@ -50,18 +50,19 @@ class TokenController:
     def issue_token(self, to_user: User) -> Token:
         key = None
         while True:
-            with self.storage.transaction() as tx:
-                key = ''.join(random.choice(
-                    string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16)
-                )
-                if self.check_token(key):
-                    continue
-                t = Token(user=to_user, expires=datetime.now() + timedelta(days=7), token=key)
-                t.save()
-                tx.commit()
-                break
+            self.storage.begin(subtransactions=True)
+            key = ''.join(random.choice(
+                string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16)
+            )
+            if self.check_token(key):
+                self.storage.rollback()
+                continue
+            t = Token(user_id=to_user.id, expires=datetime.now() + timedelta(days=7), token=key)
+            self.storage.add(t)
+            self.storage.commit()
+            break
 
-        return self.storage.query(Token).get(token=key)
+        return self.storage.query(Token).filter_by(token=key).first()
 
 
 class UserController:
@@ -70,7 +71,10 @@ class UserController:
         self.storage = storage
 
     def get_administrators(self):
-        return self.storage.query(User).filter_by(role='Administrator')
+        users = self.storage.query(User).all()
+        for u in users:
+            if u.role == "Administrator":
+                yield u
 
     def initial_user_created(self) -> bool:
         for user in self.get_administrators():
@@ -80,7 +84,7 @@ class UserController:
 
     def check_credentials(self, lr: LoginRequest) -> bool:
         user = self.storage.query(User).filter_by(username=lr.username).first()
-        return bcrypt.checkpw(lr.password, user.password)
+        return bcrypt.checkpw(lr.password.encode("utf8"), user.password)
 
     def get_user(self, username: str) -> User:
         return self.storage.query(User).filter_by(username=username).first()
@@ -99,7 +103,8 @@ class UserController:
             username = rq.username,
             role = rq.role,
             password = password_hash,
-            email=rq.email
+            email=rq.email,
+            random_seed=bcrypt.gensalt()
         )
 
         self.storage.add(u)
@@ -142,7 +147,7 @@ class InitialUserResource:
 
     def on_get(self, req, resp): # checkNeedsSetup
         initial = not UserController(req.session).initial_user_created()
-        response = ConfigurationResponse(requires_setup=(initial==initial))
+        response = ConfigurationResponse(requires_setup=(initial))
         resp.obj = response
         resp.status = falcon.HTTP_200
         return resp
@@ -157,8 +162,8 @@ class InitialUserResource:
             #resp.status = falcon.HTTPNotAcceptable
         else:
             t = TokenController(req.session)
-            token = t.get_token_for_user(u.get_user(rq.username))
-            resp.obj = LoginResponse(token=token)
+            token = t.get_or_create_token_for_user(u.get_user(rq.username))
+            resp.obj = LoginResponse(token=token.token)
             resp.status = '201'
         return resp
 
@@ -173,7 +178,7 @@ class TokenResource:
         if u.check_credentials(l):
             user = u.get_user(l.username)
             resp.status = '200'
-            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user))
+            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token)
         else:
             resp.status = '403'
             resp.media = None
@@ -275,6 +280,7 @@ def create_app(engine=None):
     app = falcon.API(middleware=[AttachSessionComponent(), JSONTranslatorComponent(), RequireJSONComponent(),
                                  ObfuscationComponent()])
     app.add_route("/conf/initialUser", InitialUserResource())
+    app.add_route("/auth/token", TokenResource())
     return app
 
 app = create_app()

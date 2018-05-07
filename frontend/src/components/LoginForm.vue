@@ -92,12 +92,6 @@
         this.state = 'warning';
       };
 
-      const loginFailure = (response) => {
-        this.state = 'warning';
-        this.promptText = 'Couldn\'t verify those details.';
-        this.$Progress.stop();
-      };
-
       this.$Progress.start(5);
       this.promptText = 'Logging in...';
       this.state = 'working';
@@ -124,50 +118,6 @@
       });
     },
 
-    createDefaultUser() {
-      const success = (response) => {
-        this.promptText = 'Welcome.';
-        this.state = 'success';
-        const redirectToLogin = () => {
-          this.$router.push('login');
-        };
-        setTimeout(redirectToLogin, 1500);
-      };
-
-      const failure = (response) => {
-        this.state = 'error';
-        this.promptText = 'Something went wrong';
-        console.log(response);
-      };
-
-      const warning = (err) => {
-        const error = err.response.data;
-        for (const key in error.errors.keys()) {
-          if (key) {
-            const problem = error.errors[key];
-            this.promptText = `${key}: ${problem}`;
-          }
-        }
-        this.state = 'warning';
-      };
-
-      HTTP.post('v1/control/setup', {
-        username: this.username,
-        password: this.password,
-        email: this.email,
-        is_superuser: true,
-        is_staff: true,
-      }).then((response) => {
-        success(response);
-      }).catch((error) => {
-        console.log(JSON.stringify(error));
-        if (error.response.status === 422) {
-          warning(error);
-        } else {
-          failure(error);
-        }
-      });
-    },
   },
 };
 

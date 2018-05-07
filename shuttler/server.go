@@ -215,7 +215,7 @@ func main() {
 
 	// Start the front-end and back-end servers
 	frontEndMux := http.NewServeMux()
-	frontEndMux.Handle("/ws", ClientWithServerMessageHandler)
+	frontEndMux.HandleFunc("/ws", ClientWithServerMessageHandler)
 
 	//  backendMux := http.NewServeMux()
 	//  backendMux.Handle("/ws", ServerMessageHandler)

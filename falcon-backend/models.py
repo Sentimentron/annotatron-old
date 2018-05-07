@@ -16,6 +16,7 @@ class User(Base):
     password_last_changed = Column(DateTime)
     role = Column(Enum("Administrator", "Staff", "Reviewer", "Annotator"))
     deactivated_on = Column(DateTime)
+    random_seed = Column(String)
 
     tokens = relationship('Token')
 

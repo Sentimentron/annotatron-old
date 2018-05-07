@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS an_users (
   password bytea NOT NULL,
   password_last_changed timestamptz NULL,
   role an_user_type_v1 NOT NULL,
+  random_seed text NOT NULL,
   deactivated_on timestamptz
 );
 
