@@ -5,27 +5,8 @@ from sqlalchemy import exc
 from sqlalchemy.orm import sessionmaker
 from models import User, Token
 import logging
-
-"""
-   template_engine = sa.create_engine("postgres://postgres@/postgres", echo=False)
-
-    conn = template_engine.connect()
-    conn = conn.execution_options(autocommit=False)
-    conn.execute("ROLLBACK")
-    try:
-        conn.execute("DROP DATABASE %s" % DB_NAME)
-    except sa.exc.ProgrammingError as e:
-        # Could not drop the database, probably does not exist
-        conn.execute("ROLLBACK")
-    except sa.exc.OperationalError as e:
-        # Could not drop database because it's being accessed by other users (psql prompt open?)
-        conn.execute("ROLLBACK")
-
-    conn.execute("CREATE DATABASE %s" % DB_NAME)
-    conn.close()
-
-    template_engine.dispose()
-"""
+import os
+import sys
 
 
 class MyTestCase(testing.TestCase):
@@ -58,13 +39,24 @@ class MyTestCase(testing.TestCase):
         Copies the current Annotatron database schema to a blank new one.
         :return: An engine pointing at the new schema
         """
+        # Create the testing database
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/postgres",
                              isolation_level="AUTOCOMMIT").connect()
-        conn = conn.execution_options(autocommit=True)
-        conn.execute("CREATE DATABASE annotatron_test TEMPLATE annotatron")
+        conn.execute("CREATE DATABASE annotatron_test")
 
+        # Read the Annotatron SQL specification
+        current_directory = os.path.dirname(os.path.realpath(__file__))
+        docker_db_file = os.path.join(current_directory, "../docker/postgres/files/db.sql")
+        with open(docker_db_file, "r") as fin:
+            database_statements = fin.read()
+
+        # Create the database tables with an up-to-date schema
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/annotatron_test",
                              isolation_level="AUTOCOMMIT")
+        conn.execute(database_statements)
+
+        # Create a connection with the default isolation level
+        conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/annotatron_test")
         return conn
 
     def setUp(self):

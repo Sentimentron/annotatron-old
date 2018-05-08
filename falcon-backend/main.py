@@ -164,7 +164,7 @@ class InitialUserResource:
             t = TokenController(req.session)
             token = t.get_or_create_token_for_user(u.get_user(rq.username))
             resp.obj = LoginResponse(token=token.token)
-            resp.status = '201'
+            resp.status = falcon.HTTP_201
         return resp
 
 
@@ -177,10 +177,10 @@ class TokenResource:
 
         if u.check_credentials(l):
             user = u.get_user(l.username)
-            resp.status = '200'
+            resp.status = falcon.HTTP_200
             resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token)
         else:
-            resp.status = '403'
+            resp.status = falcon.HTTP_403
             resp.media = None
         return resp
 
