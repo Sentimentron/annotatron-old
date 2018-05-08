@@ -204,9 +204,10 @@ paths:
         - auth
       operationId: getWhoIAm
       description: >-
+        Redirects to a resource that describes the currently signed in user.
         Returns an object with the currently-signed in User details.
       responses:
-        200:
+        302:
           description: "Successful."
           content:
             application/json:
@@ -215,6 +216,62 @@ paths:
         202:
           description: "Not logged in."
 
+  /auth/users/{userId}:
+    get:
+      tags:
+        - auth
+      operationId: getUserDetails
+      summary: Retrieve information about an Annotatron user.
+      description: >-
+        If called by an Administrator or Staff user, returns information about a specified user.
+        If called by any other user, information about their account will be presented, so long as `userId` matches the current user.
+      parameters:
+        - name: userId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: >-
+            Application-global identifier for the user.
+      responses:
+        200:
+          description: "Successful"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /auth/users/{userId}/password:
+    put:
+      tags:
+        - auth
+      operationId: changeUserPassword
+      summary: Change or reset a password on an account
+      description: >-
+        * If called by an Administrator, resets the current password on a User's account.
+          The account holder will be asked to set a new password the next time they log in.
+        * If called by a user, `oldPassword` must be present and match the existing password
+          set for the account.
+      parameters:
+        - name: userId
+          in: path
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: >-
+            Application-global identifier for the current user (if changing their password) or the target user (if an administrator is doing it).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        202:
+          description: "Accepted"
+        403:
+          description: "Password could not be changed due to mismatch"
 
   /auth/users:
     get:
@@ -1191,6 +1248,16 @@ components:
               description: >-
                 User-provided JSON content
 
+    PasswordResetRequest:
+      required:
+        - newPassword
+      properties:
+        oldPassword:
+          type: string
+          description: The previously set password, if available.
+        newPassword:
+          type: string
+          description: The password to set the user's account to.
 
     LoginRequest:
       required:
@@ -1212,6 +1279,12 @@ components:
       properties:
         token:
           type: string
+          description: >-
+            This string must be used in all future HTTP transactions via the `Authorization: Bearer` HTTP header.
+        passwordResetNeeded:
+          type: boolean
+          description: >-
+            If true, the user must reset their password as soon as possible.
 
     MultipleChoiceQuestion:
       allOf:

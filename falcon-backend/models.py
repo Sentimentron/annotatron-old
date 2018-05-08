@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, Enum, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, LargeBinary, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -18,6 +18,8 @@ class User(Base):
     deactivated_on = Column(DateTime)
     random_seed = Column(String)
 
+    password_reset_needed = Column(Boolean)
+
     tokens = relationship('Token')
 
 
@@ -28,3 +30,4 @@ class Token(Base):
     user_id = Column(Integer, ForeignKey('an_users.id'))
     expires = Column(DateTime)
     token = Column(String, unique=True)
+    user = relationship("User", back_populates="tokens")

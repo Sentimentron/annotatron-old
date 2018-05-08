@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS an_users (
   password_last_changed timestamptz NULL,
   role an_user_type_v1 NOT NULL,
   random_seed text NOT NULL,
-  deactivated_on timestamptz
+  deactivated_on timestamptz,
+  password_reset_needed boolean NOT NULL default FALSE
 );
 
 CREATE TABLE IF NOT EXISTS an_user_tokens (

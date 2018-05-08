@@ -8,6 +8,8 @@ import logging
 import os
 import sys
 
+from pyannotatron.models import AnnotatronUser, UserKind
+
 
 class MyTestCase(testing.TestCase):
 
@@ -83,6 +85,46 @@ class MyTestCase(testing.TestCase):
         self.connection.close()
 
 
+class TestCaseWithDefaultAdmin(MyTestCase):
+    def setUp(self):
+        super().setUp()
+        self.current_token = None
+        initial_user = {
+            "username": "admin",
+            "email": "admin@test.com",
+            "password": "Faaar",
+            "role": "Administrator"
+        }
+
+        result = self.simulate_post('/conf/initialUser', json=initial_user)
+        print(result.json)
+
+        self.assertTrue("token" in result.json)
+        self.current_token = result.json["token"]
+
+    def simulate_request(self, *args, **kwargs):
+        headers = {}
+        #kwargs["auth"] = "Bearer {}".format(self.current_token)
+        if True:
+            if "auth" in kwargs:
+                headers = kwargs["headers"]
+            if self.current_token:
+                headers["Authorization"] = "Bearer {}".format(self.current_token)
+        kwargs["headers"] = headers
+        return super().simulate_request(*args, **kwargs)
+
+    def test_whoami(self):
+        response = self.simulate_get("/auth/whoAmI")
+        self.assertEquals(response.status_code, 302)
+        location = response.headers["location"]
+
+        response = self.simulate_get(location)
+        u = AnnotatronUser.from_json(response.json)
+        self.assertEquals(u.username, "admin")
+        self.assertEquals(u.email, "admin@test.com")
+        self.assertEquals(u.role, UserKind.ADMINISTRATOR)
+
+
 class TestInitialUserResources(MyTestCase):
 
     def setUp(self):
@@ -124,6 +166,8 @@ class TestInitialUserResources(MyTestCase):
 
         result = self.simulate_post('/auth/token', json=new_user)
         self.assertTrue("token" in result.json)
+        self.assertTrue("passwordResetNeeded" in result.json)
+        self.assertFalse(result.json["passwordResetNeeded"])
 
         self.assertEqual(current, result.json["token"])
 

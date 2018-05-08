@@ -33,7 +33,7 @@ class TokenController:
     def get_user_from_token(self, token: str) -> User:
         matches = self.storage.query(Token).filter_by(token=token)
         if matches.count() > 0:
-            return matches.first()
+            return matches.first().user
 
     def get_token_for_user(self, user: User) -> Token:
         self.clean_expired_tokens()
@@ -82,6 +82,9 @@ class UserController:
             return True
         return False
 
+    def get_user_from_id(self, id: int) -> User:
+        return self.storage.query(User).get(id)
+
     def check_credentials(self, lr: LoginRequest) -> bool:
         user = self.storage.query(User).filter_by(username=lr.username).first()
         return bcrypt.checkpw(lr.password.encode("utf8"), user.password)
@@ -89,7 +92,7 @@ class UserController:
     def get_user(self, username: str) -> User:
         return self.storage.query(User).filter_by(username=username).first()
 
-    def _create_user(self, rq: NewUserRequest) -> ValidationError:
+    def _create_user(self, rq: NewUserRequest, reset_needed=False) -> ValidationError:
         # Check for obvious issues like missing fields
         if False:
             errors = rq.check_for_problems()
@@ -104,7 +107,8 @@ class UserController:
             role = rq.role,
             password = password_hash,
             email=rq.email,
-            random_seed=bcrypt.gensalt()
+            random_seed=bcrypt.gensalt(),
+            password_reset_needed=reset_needed,
         )
 
         self.storage.add(u)
@@ -119,7 +123,7 @@ class UserController:
             return ValidationError([FieldError("_state", "initial user already created", False)])
 
         rq.role = "Administrator"
-        return self._create_user(rq)
+        return self._create_user(rq, reset_needed=False)
 
 
 class CurrentUserResource:
@@ -162,10 +166,46 @@ class InitialUserResource:
             #resp.status = falcon.HTTPNotAcceptable
         else:
             t = TokenController(req.session)
-            token = t.get_or_create_token_for_user(u.get_user(rq.username))
-            resp.obj = LoginResponse(token=token.token)
+            user = u.get_user(rq.username)
+            token = t.get_or_create_token_for_user(user)
+            resp.obj = LoginResponse(token=token.token, password_reset_needed=user.password_reset_needed)
             resp.status = falcon.HTTP_201
         return resp
+
+
+class WhoAmIResource:
+
+    def on_get(self, req, resp): # getWhoIAm
+        obfuscated_id = req.obfuscate_int64_field(req.user.id)
+        redirect = "/auth/users/{}".format(obfuscated_id)
+        raise falcon.HTTPFound(redirect)
+
+
+class UserResource:
+
+    def on_get(self, req, resp, id): #getUserDetails
+        original_id = req.recover_int64_field(id)
+        if req.user.role == UserKind.ADMINISTRATOR.value:
+            u = UserController(req.session).get_user_from_id(original_id)
+            response = AnnotatronUser(
+                username=u.username,
+                email=u.email,
+                role=UserKind(u.role),
+                created=u.created,
+                id=id,
+            )
+            resp.obj = response
+        elif original_id == req.user.id:
+            response = AnnotatronUser(
+                username=req.user.username,
+                email=req.user.email,
+                role=UserKind(req.user.role),
+                created=req.user.created,
+                id=id,
+            )
+            resp.obj = response
+        else:
+            raise falcon.HTTPForbidden()
 
 
 class TokenResource:
@@ -178,7 +218,7 @@ class TokenResource:
         if u.check_credentials(l):
             user = u.get_user(l.username)
             resp.status = falcon.HTTP_200
-            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token)
+            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token, password_reset_needed=user.password_reset_needed)
         else:
             resp.status = falcon.HTTP_403
             resp.media = None
@@ -186,8 +226,9 @@ class TokenResource:
 
 
 class GetSessionTokenComponent:
+
     def process_request(self, req, resp):
-        auth = req.auth
+        auth = req.get_header('Authorization')
         if auth:
             method, _, auth = auth.partition(' ')
             if method != 'Bearer':
@@ -209,7 +250,7 @@ class ObfuscationComponent:
         def recover_int64_field(x):
             cipher = ARC4.new("habppootle")
             cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
-            return int.from_bytes(cipher.decrypt(x), byteorder='big')
+            return int.from_bytes(cipher.decrypt((int(x)).to_bytes(8, byteorder='big')), byteorder='big')
 
         req.obfuscate_int64_field = obfuscate_int64_field
         req.recover_int64_field = recover_int64_field
@@ -278,9 +319,11 @@ def create_app(engine=None):
         engine = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost/annotatron", echo=True)
     Session.configure(bind=engine)
     app = falcon.API(middleware=[AttachSessionComponent(), JSONTranslatorComponent(), RequireJSONComponent(),
-                                 ObfuscationComponent()])
+                                 ObfuscationComponent(), GetSessionTokenComponent()])
     app.add_route("/conf/initialUser", InitialUserResource())
     app.add_route("/auth/token", TokenResource())
+    app.add_route("/auth/whoAmI", WhoAmIResource())
+    app.add_route("/auth/users/{id}", UserResource())
     return app
 
 app = create_app()
