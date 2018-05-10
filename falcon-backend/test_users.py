@@ -124,6 +124,19 @@ class TestCaseWithDefaultAdmin(MyTestCase):
         self.assertEquals(u.email, "admin@test.com")
         self.assertEquals(u.role, UserKind.ADMINISTRATOR)
 
+    def test_password_self_change(self):
+        """
+            TODO: check that the administrator can change their own password (and that it's accepted).
+            TODO: check that Annotatron rejects the old password if invalid.
+            TODO: check that Administrators can change user account passwords.
+                    LoginResponse should indicate password reset bit.
+            TODO: check that Administrators can change other Administrator's passwords (so long as there's
+                  always one Administrator who doesn't require a password reset.)
+            TODO: check that Staff/Annotator/Reviewer users can change their own passwords.
+            TODO: check that Staff/Annotator/Reviewer users can't change other people's passwords.
+        """
+        pass
+
 
 class TestInitialUserResources(MyTestCase):
 
