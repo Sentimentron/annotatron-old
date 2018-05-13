@@ -253,6 +253,7 @@ paths:
           The account holder will be asked to set a new password the next time they log in.
         * If called by a user, `oldPassword` must be present and match the existing password
           set for the account.
+        * All current login tokens will be invalidated.
       parameters:
         - name: userId
           in: path
@@ -279,7 +280,7 @@ paths:
         - auth
       operationId: listUsers
       description: >-
-        Lists all available users. Can be done by a `Staff`.
+        Retrieve's all application-global user identifiers. Can be done by a `Staff` or higher.
       responses:
         200:
           description: "Successful"
@@ -288,7 +289,8 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/User"
+                  type: integer
+                  format: int64
     post:
       operationId: createUser
       tags:

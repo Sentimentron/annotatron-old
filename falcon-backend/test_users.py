@@ -1,4 +1,5 @@
 from falcon import testing
+import falcon
 from main import create_app
 from sqlalchemy import create_engine
 from sqlalchemy import exc
@@ -8,7 +9,7 @@ import logging
 import os
 import sys
 
-from pyannotatron.models import AnnotatronUser, UserKind
+from pyannotatron.models import AnnotatronUser, UserKind, NewUserRequest, LoginResponse, LoginRequest
 
 
 class MyTestCase(testing.TestCase):
@@ -115,19 +116,23 @@ class TestCaseWithDefaultAdmin(MyTestCase):
 
     def test_whoami(self):
         response = self.simulate_get("/auth/whoAmI")
-        self.assertEquals(response.status_code, 302)
+        self.assertEqual(response.status_code, 302)
         location = response.headers["location"]
 
         response = self.simulate_get(location)
         u = AnnotatronUser.from_json(response.json)
-        self.assertEquals(u.username, "admin")
-        self.assertEquals(u.email, "admin@test.com")
-        self.assertEquals(u.role, UserKind.ADMINISTRATOR)
+        self.assertEqual(u.username, "admin")
+        self.assertEqual(u.email, "admin@test.com")
+        self.assertEqual(u.role, UserKind.ADMINISTRATOR)
+
+    def get_current_user_id(self):
+        response = self.simulate_get("/auth/whoAmI")
+        self.assertEqual(response.status_code, 302)
+        location = response.headers["location"]
+        return location.split('/')[-1]
 
     def test_password_self_change(self):
         """
-            TODO: check that the administrator can change their own password (and that it's accepted).
-            TODO: check that Annotatron rejects the old password if invalid.
             TODO: check that Administrators can change user account passwords.
                     LoginResponse should indicate password reset bit.
             TODO: check that Administrators can change other Administrator's passwords (so long as there's
@@ -135,7 +140,65 @@ class TestCaseWithDefaultAdmin(MyTestCase):
             TODO: check that Staff/Annotator/Reviewer users can change their own passwords.
             TODO: check that Staff/Annotator/Reviewer users can't change other people's passwords.
         """
-        pass
+
+        old_token = self.current_token
+        current_id = self.get_current_user_id()
+        password_change = {
+            "oldPassword": "Faaar",
+            "newPassword": "Blarg"
+        }
+
+        response = self.simulate_put("/auth/users/{}/password".format(current_id), json=password_change)
+        self.assertEqual(response.status, falcon.HTTP_202)
+
+        login_request = {
+            "username": "admin",
+            "password": "Blarg"
+        }
+        response = self.simulate_post("/auth/token", json=login_request)
+        self.assertEqual(response.status, falcon.HTTP_OK)
+        self.assertTrue("token" in response.json)
+        self.current_token = response.json["token"]
+
+        self.assertNotEqual(self.current_token, old_token)
+
+        new_id = self.get_current_user_id()
+        self.assertEqual(new_id, current_id)
+
+    def test_password_self_change_with_wrong_password(self):
+        current_id = self.get_current_user_id()
+        password_change = {
+            "oldPassword": "Faaara",
+            "newPassword": "Blarg"
+        }
+
+        response = self.simulate_put("/auth/users/{}/password".format(current_id), json=password_change)
+        self.assertEqual(response.status, falcon.HTTP_FORBIDDEN)
+
+    def test_can_create_users(self):
+        n = NewUserRequest("staff", "staff@ant.io", UserKind.STAFF, "kerflaag")
+        response = self.simulate_post("/auth/users", json=n.to_json())
+        self.assertEqual(response.status, falcon.HTTP_201)
+
+        login_request = LoginRequest("staff", "kerflaag")
+        response = self.simulate_post("/auth/token", json=login_request.to_json())
+        self.assertEqual(response.status, falcon.HTTP_200)
+        login_response = LoginResponse.from_json(response.json)
+
+        self.assertTrue(login_response.password_reset_needed)
+
+
+class TestCaseWithEachUserType(TestCaseWithDefaultAdmin):
+
+    def setUp(self):
+        super().setUp()
+        n = NewUserRequest("staff", "staff@ant.io", UserKind.STAFF, "kerflaag")
+        response = self.simulate_post("/auth/users", json=n.to_json())
+        self.assertEqual(response.status, falcon.HTTP_201)
+
+        n = NewUserRequest("staff", "staff@ant.io", UserKind.USER, "kerflaag")
+        response = self.simulate_post("/auth/users", json=n.to_json())
+        self.assertEqual(response.status, falcon.HTTP_201)
 
 
 class TestInitialUserResources(MyTestCase):

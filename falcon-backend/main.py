@@ -26,6 +26,9 @@ class TokenController:
     def clean_expired_tokens(self):
         self.storage.query(Token).filter(Token.expires < datetime.utcnow()).delete()
 
+    def remove_tokens_for_user(self, user: User):
+        self.storage.query(Token).filter(Token.user_id == user.id).delete()
+
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
         return self.storage.query(Token).filter(Token.expires > datetime.utcnow()).filter_by(token=token).count() == 1
@@ -104,7 +107,7 @@ class UserController:
 
         u = User(
             username = rq.username,
-            role = rq.role,
+            role = rq.role.value,
             password = password_hash,
             email=rq.email,
             random_seed=bcrypt.gensalt(),
@@ -118,12 +121,32 @@ class UserController:
         #self.storage.commit()
         return None
 
+    def create_user(self, new_user: NewUserRequest, requesting_user: User):
+        if requesting_user.role != UserKind.ADMINISTRATOR.value:
+            return ValidationError([FieldError("_meta", "requesting user is not administrator", False)])
+
+        return self._create_user(new_user, reset_needed=True)
+
     def create_initial_user(self, rq) -> ValidationError:
         if self.initial_user_created():
             return ValidationError([FieldError("_state", "initial user already created", False)])
 
-        rq.role = "Administrator"
+        rq.role = UserKind.ADMINISTRATOR
         return self._create_user(rq, reset_needed=False)
+
+    def change_password(self, user: User, old_password: str, new_password: str, check_password: bool) -> ValidationError:
+        if check_password:
+            # Check the credentials
+            status = bcrypt.checkpw(old_password.encode("utf8"), user.password)
+            if not status:
+                return ValidationError([FieldError("password", "must match original", False)])
+
+        new_hash = bcrypt.hashpw(new_password.encode("utf8"), bcrypt.gensalt())
+        user.password = new_hash
+        self.storage.commit()
+
+        t = TokenController(self.storage)
+        t.remove_tokens_for_user(user)
 
 
 class CurrentUserResource:
@@ -204,6 +227,43 @@ class UserResource:
                 id=id,
             )
             resp.obj = response
+        else:
+            raise falcon.HTTPForbidden()
+
+    def on_post(self, req, resp): #createUser
+        u = UserController(req.session)
+        rq = NewUserRequest.from_json(req.body)
+        errors = u.create_user(rq, req.user)
+        if errors:
+            resp.obj = errors
+            resp.status = falcon.HTTP_403
+            # resp.status = falcon.HTTPNotAcceptable
+        else:
+            t = TokenController(req.session)
+            user = u.get_user(rq.username)
+            token = t.get_or_create_token_for_user(user)
+            resp.obj = LoginResponse(token=token.token, password_reset_needed=user.password_reset_needed)
+            resp.status = falcon.HTTP_201
+        return resp
+
+class UserPasswordResource:
+
+    def on_put(self, req, resp, id):
+        original_id = req.recover_int64_field(id)
+        if req.user.role == UserKind.ADMINISTRATOR.value or original_id == req.user.id:
+            # User's changing their own password, or they're an administrator
+            old_password = req.body["oldPassword"]
+            new_password = req.body["newPassword"]
+
+            should_check_password = req.user.id == original_id
+
+            u = UserController(req.session)
+            user = u.get_user_from_id(original_id)
+            errors = u.change_password(user, old_password, new_password, should_check_password)
+            if errors:
+                resp.obj = errors
+                raise falcon.HTTPForbidden()
+            resp.status = falcon.HTTP_202
         else:
             raise falcon.HTTPForbidden()
 
@@ -323,7 +383,10 @@ def create_app(engine=None):
     app.add_route("/conf/initialUser", InitialUserResource())
     app.add_route("/auth/token", TokenResource())
     app.add_route("/auth/whoAmI", WhoAmIResource())
+    app.add_route("/auth/users", UserResource())
     app.add_route("/auth/users/{id}", UserResource())
+    app.add_route("/auth/users/{id}/password", UserPasswordResource())
+
     return app
 
 app = create_app()
