@@ -14,8 +14,7 @@ from pyannotatron.models import AnnotatronUser, UserKind, NewUserRequest, LoginR
 
 class MyTestCase(testing.TestCase):
 
-    @classmethod
-    def try_drop_existing_db(cls):
+    def try_drop_existing_db(self):
         """
         Drop the existing test database, if it exists.
         :return: True on success
@@ -24,11 +23,11 @@ class MyTestCase(testing.TestCase):
         conn = conn.execution_options(autocommit=False)
         conn.execute("ROLLBACK")
         try:
-            conn.execute("DROP DATABASE %s" % "annotatron_test")
+            conn.execute("DROP DATABASE %s" % self.db_name)
         except exc.ProgrammingError as e:
             # Could not drop the database, probably does not exist
             conn.execute("ROLLBACK")
-            logging.fatal("Could not drop the test database")
+            logging.error("Could not drop the test database: %s", e)
         except exc.OperationalError as e:
             # Could not drop database because it's being accessed by other users (psql prompt open?)
             conn.execute("ROLLBACK")
@@ -36,8 +35,12 @@ class MyTestCase(testing.TestCase):
             raise e
         return True
 
-    @classmethod
-    def try_create_testing_db(cls):
+    @property
+    def db_name(self):
+        return "annotatron_test_{}".format(len(self.id()))
+        #return self.id().replace('.', '')
+
+    def try_create_testing_db(self):
         """
         Copies the current Annotatron database schema to a blank new one.
         :return: An engine pointing at the new schema
@@ -45,7 +48,8 @@ class MyTestCase(testing.TestCase):
         # Create the testing database
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/postgres",
                              isolation_level="AUTOCOMMIT").connect()
-        conn.execute("CREATE DATABASE annotatron_test")
+        conn.execute("CREATE DATABASE {}".format(self.db_name))
+        conn.close()
 
         # Read the Annotatron SQL specification
         current_directory = os.path.dirname(os.path.realpath(__file__))
@@ -54,12 +58,12 @@ class MyTestCase(testing.TestCase):
             database_statements = fin.read()
 
         # Create the database tables with an up-to-date schema
-        conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/annotatron_test",
+        conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/{}".format(self.db_name),
                              isolation_level="AUTOCOMMIT")
         conn.execute(database_statements)
 
         # Create a connection with the default isolation level
-        conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/annotatron_test")
+        conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/{}".format(self.db_name))
         return conn
 
     def setUp(self):
@@ -196,9 +200,67 @@ class TestCaseWithEachUserType(TestCaseWithDefaultAdmin):
         response = self.simulate_post("/auth/users", json=n.to_json())
         self.assertEqual(response.status, falcon.HTTP_201)
 
-        n = NewUserRequest("staff", "staff@ant.io", UserKind.USER, "kerflaag")
+        n = NewUserRequest("reviewer", "reviewer@ant.io", UserKind.REVIEWER, "kerflaag")
         response = self.simulate_post("/auth/users", json=n.to_json())
         self.assertEqual(response.status, falcon.HTTP_201)
+
+        n = NewUserRequest("annotator", "reviewer@ant.io", UserKind.ANNOTATOR, "kerflaag")
+        response = self.simulate_post("/auth/users", json=n.to_json())
+        self.assertEqual(response.status, falcon.HTTP_201)
+
+        # Retrieve a list of users
+        response = self.simulate_get("/auth/users")
+        self.assertEqual(response.status, falcon.HTTP_OK)
+        self.user_map = {}
+        for user_id in response.json:
+            response = self.simulate_get("/auth/users/{}".format(user_id))
+            active_user = AnnotatronUser.from_json(response.json)
+            self.user_map[user_id] = active_user
+
+    def switch_to_user_role(self, role: UserKind):
+        for user_id in self.user_map:
+            if self.user_map[user_id].role == role:
+                active_user = self.user_map[user_id]
+        login_request = LoginRequest(active_user.username, "kerflaag")
+        response = self.simulate_post("/auth/token", json=login_request.to_json())
+        self.assertEqual(response.status, falcon.HTTP_200)
+        login_response = LoginResponse.from_json(response.json)
+        self.current_token = login_response.token
+        return login_response
+
+    def test_admin_can_reset_user_password(self):
+        current_id = [x for x in self.user_map if self.user_map[x].role != UserKind.ADMINISTRATOR][0]
+        password_change = {
+            "newPassword": "Blarg"
+        }
+
+        response = self.simulate_put("/auth/users/{}/password".format(current_id), json=password_change)
+        self.assertEqual(response.status, falcon.HTTP_202)
+
+        current_user = self.user_map[current_id]
+        login_request = LoginRequest(current_user.username, "Blarg")
+        response = self.simulate_post("/auth/token", json=login_request.to_json())
+        login_response = LoginResponse.from_json(response.json)
+        self.assertTrue(login_response.password_reset_needed)
+
+    def test_user_can_set_own_password(self):
+        current_id = [x for x in self.user_map if self.user_map[x].role != UserKind.ADMINISTRATOR][0]
+        password_change = {
+            "oldPassword": "kerflaag",
+            "newPassword": "Blarg"
+        }
+
+        current_user = self.user_map[current_id]
+        self.switch_to_user_role(current_user.role)
+
+        response = self.simulate_put("/auth/users/{}/password".format(current_id), json=password_change)
+        self.assertEqual(response.status, falcon.HTTP_202)
+
+        current_user = self.user_map[current_id]
+        login_request = LoginRequest(current_user.username, "Blarg")
+        response = self.simulate_post("/auth/token", json=login_request.to_json())
+        login_response = LoginResponse.from_json(response.json)
+        self.assertFalse(login_response.password_reset_needed)
 
 
 class TestInitialUserResources(MyTestCase):

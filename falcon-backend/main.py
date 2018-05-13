@@ -28,6 +28,7 @@ class TokenController:
 
     def remove_tokens_for_user(self, user: User):
         self.storage.query(Token).filter(Token.user_id == user.id).delete()
+        self.storage.commit()
 
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
@@ -74,10 +75,9 @@ class UserController:
         self.storage = storage
 
     def get_administrators(self):
-        users = self.storage.query(User).all()
+        users = self.get_all_users().filter_by(role="Administrator")
         for u in users:
-            if u.role == "Administrator":
-                yield u
+            yield u
 
     def initial_user_created(self) -> bool:
         for user in self.get_administrators():
@@ -86,14 +86,17 @@ class UserController:
         return False
 
     def get_user_from_id(self, id: int) -> User:
-        return self.storage.query(User).get(id)
+        return self.get_all_users().filter_by(id=id).first()
+
+    def get_all_users(self):
+        return self.storage.query(User).filter_by(deactivated_on=None)
 
     def check_credentials(self, lr: LoginRequest) -> bool:
-        user = self.storage.query(User).filter_by(username=lr.username).first()
+        user = self.get_user(lr.username)
         return bcrypt.checkpw(lr.password.encode("utf8"), user.password)
 
     def get_user(self, username: str) -> User:
-        return self.storage.query(User).filter_by(username=username).first()
+        return self.get_all_users().filter_by(username=username).first()
 
     def _create_user(self, rq: NewUserRequest, reset_needed=False) -> ValidationError:
         # Check for obvious issues like missing fields
@@ -112,6 +115,7 @@ class UserController:
             email=rq.email,
             random_seed=bcrypt.gensalt(),
             password_reset_needed=reset_needed,
+            deactivated_on=None,
         )
 
         self.storage.add(u)
@@ -143,6 +147,7 @@ class UserController:
 
         new_hash = bcrypt.hashpw(new_password.encode("utf8"), bcrypt.gensalt())
         user.password = new_hash
+        user.password_reset_needed = not check_password
         self.storage.commit()
 
         t = TokenController(self.storage)
@@ -206,7 +211,19 @@ class WhoAmIResource:
 
 class UserResource:
 
-    def on_get(self, req, resp, id): #getUserDetails
+    def on_get(self, req, resp, id=None): #getUserDetails # listUsers
+        if id:
+            return self._get_id(req, resp, id)
+        return self._get_all(req, resp)
+
+    def _get_all(self, req, resp):
+        user_list = UserController(req.session).get_all_users()
+        ret = []
+        for u in user_list:
+            ret.append(req.obfuscate_int64_field(u.id))
+        resp.obj = ret
+
+    def _get_id(self, req, resp, id):
         original_id = req.recover_int64_field(id)
         if req.user.role == UserKind.ADMINISTRATOR.value:
             u = UserController(req.session).get_user_from_id(original_id)
@@ -246,13 +263,17 @@ class UserResource:
             resp.status = falcon.HTTP_201
         return resp
 
+
 class UserPasswordResource:
 
     def on_put(self, req, resp, id):
         original_id = req.recover_int64_field(id)
         if req.user.role == UserKind.ADMINISTRATOR.value or original_id == req.user.id:
             # User's changing their own password, or they're an administrator
-            old_password = req.body["oldPassword"]
+            if "oldPassword" in req.body:
+                old_password = req.body["oldPassword"]
+            else:
+                old_password = None
             new_password = req.body["newPassword"]
 
             should_check_password = req.user.id == original_id
@@ -368,8 +389,11 @@ class JSONTranslatorComponent(object):
     def process_response(self, req, resp, resource):
         try:
             if resp.obj:
-                logging.info(json.dumps(resp.obj.to_json()))
-                resp.body = json.dumps(resp.obj.to_json())
+                try:
+                    logging.info(json.dumps(resp.obj.to_json()))
+                    resp.body = json.dumps(resp.obj.to_json())
+                except AttributeError:
+                    resp.body = json.dumps(resp.obj)
         except AttributeError:
             pass
 

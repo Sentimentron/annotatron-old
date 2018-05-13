@@ -15,7 +15,7 @@ class User(Base):
     password = Column(LargeBinary)
     password_last_changed = Column(DateTime)
     role = Column(Enum("Administrator", "Staff", "Reviewer", "Annotator"))
-    deactivated_on = Column(DateTime)
+    deactivated_on = Column(DateTime, nullable=True)
     random_seed = Column(String)
 
     password_reset_needed = Column(Boolean)
