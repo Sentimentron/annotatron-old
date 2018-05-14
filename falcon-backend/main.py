@@ -9,11 +9,11 @@ import bcrypt
 import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
-    LoginResponse, AnnotatronUser, UserKind
+    LoginResponse, AnnotatronUser, UserKind, Corpus
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import User, Token
+from models import User, Token, DbCorpus
 
 Session = sessionmaker()
 
@@ -154,6 +154,28 @@ class UserController:
         t.remove_tokens_for_user(user)
 
 
+class CorpusController:
+
+    def __init__(self, storage: Session):
+        self.storage = storage
+
+    def get_identifiers(self) -> [str]:
+        return [x.name for x in self.storage.query(DbCorpus).all()]
+
+    def get_corpus_from_identifier(self, id:str) -> Corpus:
+        obj = self.storage.query(DbCorpus).filter_by(name=id).first()
+        return Corpus(obj.name, obj.description, obj.created, obj.copyright_usage_restrictions, obj.id)
+
+    def create_corpus(self, c: Corpus):
+        c = DbCorpus(
+            name=c.name,
+            description=c.description,
+            copyright_usage_restrictions=c.copyright
+        )
+        self.storage.add(c)
+        self.storage.commit()
+
+
 class CurrentUserResource:
 
     def on_get(self, req, resp): #getWhoIAm
@@ -163,7 +185,7 @@ class CurrentUserResource:
 
         user = AnnotatronUser(username=req.user.username, role=UserKind(req.user.role),
                     created=req.user.created, id=req.obfuscate_int64_field(req.user.id),
-                    email=req.user.email, password=None)
+                    email=req.user.email)
         resp.media = user
 
 
@@ -306,6 +328,26 @@ class TokenResource:
         return resp
 
 
+class CorpusResource:
+
+    def on_get(self, req, resp, id=None):
+        if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
+            raise falcon.HTTPForbidden("Must be admin or staff")
+        c = CorpusController(req.session)
+        if not id:
+            resp.obj = c.get_identifiers()
+        else:
+            resp.obj = c.get_corpus_from_identifier(id)
+
+    def on_post(self, req, resp):
+        if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
+            raise falcon.HTTPForbidden("Must be admin or staff")
+        c = CorpusController(req.session)
+        new_corpus = Corpus.from_json(req.body)
+        c.create_corpus(new_corpus)
+        resp.status = falcon.HTTP_201
+
+
 class GetSessionTokenComponent:
 
     def process_request(self, req, resp):
@@ -388,7 +430,7 @@ class JSONTranslatorComponent(object):
 
     def process_response(self, req, resp, resource):
         try:
-            if resp.obj:
+            if resp.obj is not None:
                 try:
                     logging.info(json.dumps(resp.obj.to_json()))
                     resp.body = json.dumps(resp.obj.to_json())
@@ -410,6 +452,8 @@ def create_app(engine=None):
     app.add_route("/auth/users", UserResource())
     app.add_route("/auth/users/{id}", UserResource())
     app.add_route("/auth/users/{id}/password", UserPasswordResource())
+    app.add_route("/corpus", CorpusResource())
+    app.add_route("/corpus/{id}", CorpusResource())
 
     return app
 

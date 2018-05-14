@@ -2,6 +2,8 @@ from sqlalchemy import Boolean, Column, Integer, String, DateTime, LargeBinary, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+import datetime
+
 Base = declarative_base()
 
 
@@ -31,3 +33,13 @@ class Token(Base):
     expires = Column(DateTime)
     token = Column(String, unique=True)
     user = relationship("User", back_populates="tokens")
+
+
+class DbCorpus(Base):
+    __tablename__ = "an_corpora"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True)
+    description = Column(String, nullable=True)
+    created = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
+    copyright_usage_restrictions = Column(String)
