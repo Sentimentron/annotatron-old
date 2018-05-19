@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS an_assets (
   id bigserial PRIMARY KEY,
   name text NOT NULL,
   content bytea NOT NULL,
-  metadata jsonb,
+  user_metadata jsonb,
   date_uploaded timestamptz NOT NULL DEFAULT 'now',
   copyright_usage_restrictions text,
   checksum text NOT NULL,

@@ -204,7 +204,7 @@ class AssetController:
             obfuscate_int64_field(asset.uploader_id),
             asset.date_uploaded,
             obfuscate_int64_field(asset.id),
-            asset.metadata
+            asset.user_metadata
         )
 
 
@@ -223,7 +223,7 @@ class AssetController:
         :param id:
         :return:
         """
-        return self.storage.get(id)
+        return self.storage.query(InternalAsset).get(id)
 
     def create_asset(self, a: BinaryAsset, c: InternalCorpus, id: str, uploader: InternalUser) -> ValidationError:
         """
@@ -237,7 +237,7 @@ class AssetController:
         c = InternalAsset(
             name=id,
             content=a.content,
-            ueser_metadata=a.metadata,
+            user_metadata=a.metadata,
             copyright_usage_restrictions=a.copyright,
             checksum=a.checksum,
             mime_type=a.mime_type,
@@ -247,11 +247,12 @@ class AssetController:
         )
 
         self.storage.add(c)
-        self.storage.commit(c)
+        self.storage.commit()
 
     def delete_asset(self, which: InternalAsset):
         self.storage.delete(which)
         self.storage.commit()
+        return True
 
 
 class CurrentUserResource:
@@ -420,31 +421,30 @@ class CorpusResource:
                           obj.id)
 
     def get_assets_by_corpus_id(self, req, resp, corpus):
-        a = AssetController(req.sesion)
         assets = corpus.assets
-        resp.obj = [a.convert_to_external(x) for x in assets]
+        resp.obj = [x.name for x in assets]
 
     def get_asset_info_with_id(self, req, resp, corpus, id):
         controller = AssetController(req.session)
         asset = controller.get_asset_with_corpus(corpus, id)
         resp.obj = controller.convert_to_external(asset)
 
-    def on_get(self, req, resp, id=None, property=None, property_value=None):
+    def on_get(self, req, resp, corpus_id=None, corpus_property=None, property_value=None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
         routed = False
         c = CorpusController(req.session)
-        if not id:
+        if not corpus_id:
             self.list_all_corpora(req, resp, c)
             routed = True
         else:
-            corpus = c.get_corpus_from_identifier(id)
-            if not property:
-                self.get_corpus_by_id(req, resp, id, corpus)
+            corpus = c.get_corpus_from_identifier(corpus_id)
+            if not corpus_property:
+                self.get_corpus_by_id(req, resp, corpus_id, corpus)
                 routed = True
             else:
-                if property == "assets":
+                if corpus_property == "assets":
                     routed = True
                     if not property_value:
                         self.get_assets_by_corpus_id(req, resp, corpus)
@@ -454,24 +454,14 @@ class CorpusResource:
         if not routed:
             raise falcon.HTTPNotFound()
 
-        if not id:
-            resp.obj = c.get_identifiers()
-        else:
-            obj = c.get_corpus_from_identifier(id)
-            resp.obj = Corpus(obj.name,
-                              obj.description,
-                              obj.created,
-                              obj.copyright_usage_restrictions,
-                              obj.id)
-
-    def on_delete(self, req, resp, corpus_id:str, corpus_property:str, corpus_value:str): #deleteAssetWithId
+    def on_delete(self, req, resp, corpus_id:str, corpus_property:str, property_value:str): #deleteAssetWithId
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
         if corpus_property != "assets":
             raise falcon.HTTPNotFound()
 
-        self.delete_asset_with_id(req, resp, corpus_id, corpus_value)
+        self.delete_asset_with_id(req, resp, corpus_id, property_value)
 
     def delete_asset_with_id(self, req, resp, corpus_id: str, asset_id: str):
         corpus_controller = CorpusController(req.session)
@@ -485,7 +475,7 @@ class CorpusResource:
 
     def create_asset(self, req, resp, corpus_id:str, asset_id:str):
         corpus_controller = CorpusController(req.session)
-        asset_controller = AssetController(req.sesion)
+        asset_controller = AssetController(req.session)
         destination_corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
         new_asset = BinaryAsset.from_json(req.body)
         asset_controller.create_asset(new_asset, destination_corpus, asset_id, req.user)
@@ -497,7 +487,7 @@ class CorpusResource:
         c.create_corpus(new_corpus)
         resp.status = falcon.HTTP_201
 
-    def on_post(self, req, resp, corpus_id:str=None, corpus_property:str=None, corpus_value:str=None):
+    def on_post(self, req, resp, corpus_id:str=None, corpus_property:str=None, property_value:str=None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
@@ -506,8 +496,8 @@ class CorpusResource:
         elif corpus_property != "assets":
             raise falcon.HTTPNotFound()
         else:
-            self.create_asset(req, resp, corpus_id, corpus_value)
-        
+            self.create_asset(req, resp, corpus_id, property_value)
+
 
 class AssetResource:
 
@@ -518,6 +508,9 @@ class AssetResource:
         asset = asset_controller.get_asset_with_id(req.recover_int64_field(asset_id))
         resp.content_type = asset.mime_type
         resp.body = asset.content
+
+        if asset.type_description == BinaryAssetKind.UTF8_TEXT.value:
+            resp.encoding = "utf8"
 
 
 class GetSessionTokenComponent:
@@ -612,6 +605,7 @@ class JSONTranslatorComponent(object):
                         resp.body = json.dumps(resp.obj.to_json())
                 except AttributeError:
                     resp.body = json.dumps(resp.obj)
+                resp.content_type = falcon.MEDIA_JSON
         except AttributeError:
             pass
 
@@ -629,7 +623,10 @@ def create_app(engine=None):
     app.add_route("/auth/users/{id}", UserResource())
     app.add_route("/auth/users/{id}/password", UserPasswordResource())
     app.add_route("/corpus", CorpusResource())
-    app.add_route("/corpus/{id}", CorpusResource())
+    app.add_route("/corpus/{corpus_id}", CorpusResource())
+    app.add_route("/corpus/{corpus_id}/{corpus_property}", CorpusResource())
+    app.add_route("/corpus/{corpus_id}/{corpus_property}/{property_value}", CorpusResource())
+    app.add_route("/asset/{asset_id:int}/content", AssetResource())
 
     return app
 

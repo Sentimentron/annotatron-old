@@ -5,14 +5,14 @@ from pyannotatron.models import Corpus
 
 from test_users import TestCaseWithEachUserType
 
-"""class TestCaseWithDefaultCorpus(TestCaseWithEachUserType):
+class TestCaseWithDefaultCorpus(TestCaseWithEachUserType):
 
     def setUp(self):
         super().setUp()
         c = Corpus("test_corpus", "Some really long MarkDown description", copyright="Copyright (c) 2010 some guy")
         response = self.simulate_post("/corpus", json=c.to_json())
         self.assertEqual(response.status, falcon.HTTP_201)
-"""
+
 
 class TestCorpusResources(TestCaseWithEachUserType):
 
