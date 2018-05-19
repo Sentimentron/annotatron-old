@@ -9,7 +9,7 @@ import bcrypt
 import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
-    LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset, BinaryAssetDescription, BinaryAssetKind
+    LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset, BinaryAssetDescription, BinaryAssetKind, Question
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -29,6 +29,10 @@ def recover_int64_field(x):
     cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
     return int.from_bytes(cipher.decrypt((int(x)).to_bytes(8, byteorder='big')), byteorder='big')
 
+
+class CorpusConverter(falcon.routing.BaseConverter):
+
+
 class TokenController:
 
     def __init__(self, storage: Session):
@@ -43,7 +47,8 @@ class TokenController:
 
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
-        return self.storage.query(InternalToken).filter(InternalToken.expires > datetime.utcnow()).filter_by(token=token).count() == 1
+        return self.storage.query(InternalToken).filter(InternalToken.expires > datetime.utcnow()).filter_by(
+            token=token).count() == 1
 
     def get_user_from_token(self, token: str) -> InternalUser:
         matches = self.storage.query(InternalToken).filter_by(token=token)
@@ -68,7 +73,7 @@ class TokenController:
             self.storage.begin(subtransactions=True)
             key = ''.join(random.choice(
                 string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16)
-            )
+                          )
             if self.check_token(key):
                 self.storage.rollback()
                 continue
@@ -120,9 +125,9 @@ class UserController:
         password_hash = bcrypt.hashpw(rq.password.encode("utf8"), bcrypt.gensalt())
 
         u = InternalUser(
-            username = rq.username,
-            role = rq.role.value,
-            password = password_hash,
+            username=rq.username,
+            role=rq.role.value,
+            password=password_hash,
             email=rq.email,
             random_seed=bcrypt.gensalt(),
             password_reset_needed=reset_needed,
@@ -132,8 +137,8 @@ class UserController:
         self.storage.add(u)
         self.storage.commit()
 
-        #self.storage.add(u)
-        #self.storage.commit()
+        # self.storage.add(u)
+        # self.storage.commit()
         return None
 
     def create_user(self, new_user: NewUserRequest, requesting_user: InternalUser):
@@ -149,7 +154,8 @@ class UserController:
         rq.role = UserKind.ADMINISTRATOR
         return self._create_user(rq, reset_needed=False)
 
-    def change_password(self, user: InternalUser, old_password: str, new_password: str, check_password: bool) -> ValidationError:
+    def change_password(self, user: InternalUser, old_password: str, new_password: str,
+                        check_password: bool) -> ValidationError:
         if check_password:
             # Check the credentials
             status = bcrypt.checkpw(old_password.encode("utf8"), user.password)
@@ -173,7 +179,7 @@ class CorpusController:
     def get_identifiers(self) -> [str]:
         return [x.name for x in self.storage.query(InternalCorpus).all()]
 
-    def get_corpus_from_identifier(self, id:str) -> InternalCorpus:
+    def get_corpus_from_identifier(self, id: str) -> InternalCorpus:
         return self.storage.query(InternalCorpus).filter_by(name=id).first()
 
     def create_corpus(self, c: Corpus):
@@ -206,7 +212,6 @@ class AssetController:
             obfuscate_int64_field(asset.id),
             asset.user_metadata
         )
-
 
     def get_asset_with_corpus(self, c: InternalCorpus, id: str) -> InternalAsset:
         """
@@ -257,19 +262,18 @@ class AssetController:
 
 class CurrentUserResource:
 
-    def on_get(self, req, resp): #getWhoIAm
+    def on_get(self, req, resp):  # getWhoIAm
         if not req.user:
             resp.status = falcon.HTTP_202
             return resp
 
         user = AnnotatronUser(username=req.user.username, role=UserKind(req.user.role),
-                    created=req.user.created, id=req.obfuscate_int64_field(req.user.id),
-                    email=req.user.email)
+                              created=req.user.created, id=req.obfuscate_int64_field(req.user.id),
+                              email=req.user.email)
         resp.media = user
 
 
 class InitialUserResource:
-
     """
     Test:
         * Empty database, on_get should return "I need configuration."
@@ -278,21 +282,21 @@ class InitialUserResource:
         * on_post should no longer accept new users
     """
 
-    def on_get(self, req, resp): # checkNeedsSetup
+    def on_get(self, req, resp):  # checkNeedsSetup
         initial = not UserController(req.session).initial_user_created()
         response = ConfigurationResponse(requires_setup=(initial))
         resp.obj = response
         resp.status = falcon.HTTP_200
         return resp
 
-    def on_post(self, req, resp): # createInitialUser
+    def on_post(self, req, resp):  # createInitialUser
         u = UserController(req.session)
         rq = NewUserRequest.from_json(req.body)
         errors = u.create_initial_user(rq)
         if errors:
             resp.obj = errors
             resp.status = falcon.HTTP_403
-            #resp.status = falcon.HTTPNotAcceptable
+            # resp.status = falcon.HTTPNotAcceptable
         else:
             t = TokenController(req.session)
             user = u.get_user(rq.username)
@@ -304,7 +308,7 @@ class InitialUserResource:
 
 class WhoAmIResource:
 
-    def on_get(self, req, resp): # getWhoIAm
+    def on_get(self, req, resp):  # getWhoIAm
         obfuscated_id = req.obfuscate_int64_field(req.user.id)
         redirect = "/auth/users/{}".format(obfuscated_id)
         raise falcon.HTTPFound(redirect)
@@ -312,7 +316,7 @@ class WhoAmIResource:
 
 class UserResource:
 
-    def on_get(self, req, resp, id=None): #getUserDetails # listUsers
+    def on_get(self, req, resp, id=None):  # getUserDetails # listUsers
         if id:
             return self._get_id(req, resp, id)
         return self._get_all(req, resp)
@@ -348,7 +352,7 @@ class UserResource:
         else:
             raise falcon.HTTPForbidden()
 
-    def on_post(self, req, resp): #createUser
+    def on_post(self, req, resp):  # createUser
         u = UserController(req.session)
         rq = NewUserRequest.from_json(req.body)
         errors = u.create_user(rq, req.user)
@@ -400,7 +404,8 @@ class TokenResource:
         if u.check_credentials(l):
             user = u.get_user(l.username)
             resp.status = falcon.HTTP_200
-            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token, password_reset_needed=user.password_reset_needed)
+            resp.obj = LoginResponse(token=t.get_or_create_token_for_user(user).token,
+                                     password_reset_needed=user.password_reset_needed)
         else:
             resp.status = falcon.HTTP_403
             resp.media = None
@@ -454,7 +459,7 @@ class CorpusResource:
         if not routed:
             raise falcon.HTTPNotFound()
 
-    def on_delete(self, req, resp, corpus_id:str, corpus_property:str, property_value:str): #deleteAssetWithId
+    def on_delete(self, req, resp, corpus_id: str, corpus_property: str, property_value: str):  # deleteAssetWithId
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
@@ -473,7 +478,7 @@ class CorpusResource:
             raise falcon.HTTPInternalServerError("Could not delete Asset")
         resp.status = falcon.status.HTTP_ACCEPTED
 
-    def create_asset(self, req, resp, corpus_id:str, asset_id:str):
+    def create_asset(self, req, resp, corpus_id: str, asset_id: str):
         corpus_controller = CorpusController(req.session)
         asset_controller = AssetController(req.session)
         destination_corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
@@ -487,7 +492,7 @@ class CorpusResource:
         c.create_corpus(new_corpus)
         resp.status = falcon.HTTP_201
 
-    def on_post(self, req, resp, corpus_id:str=None, corpus_property:str=None, property_value:str=None):
+    def on_post(self, req, resp, corpus_id: str = None, corpus_property: str = None, property_value: str = None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
@@ -511,6 +516,13 @@ class AssetResource:
 
         if asset.type_description == BinaryAssetKind.UTF8_TEXT.value:
             resp.encoding = "utf8"
+
+
+class QuestionResource:
+    def __init(self, storage):
+        self.storage = storage
+
+    def create_question(self, asset: InternalAsset, question: Question):
 
 
 class GetSessionTokenComponent:
@@ -629,6 +641,7 @@ def create_app(engine=None):
     app.add_route("/asset/{asset_id:int}/content", AssetResource())
 
     return app
+
 
 app = create_app()
 

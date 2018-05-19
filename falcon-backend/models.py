@@ -64,3 +64,40 @@ class InternalAsset(Base):
 
     corpus = relationship("InternalCorpus", back_populates="assets")
     uploader = relationship("InternalUser", back_populates="uploaded_assets")
+
+
+class InternalAbstractQuestion(Base):
+
+    __tablename__ = "an_questions"
+    id = Column(Integer, primary_key=True)
+    human_prompt = Column(String)
+    kind = Column(String)
+    summary_code = Column(String)
+    created = Column(DateTime, default=datetime.datetime.now())
+    annotation_instructions = Column(String)
+    detailed_annotations_instructions = Column(String)
+
+    __mapper_args__ = {
+        'polymorphic_identity': type,
+    }
+
+
+class InternalMultipleChoiceQuestion(InternalAbstractQuestion):
+
+    choices = Column(JSON)
+    __mapper_args__ = {
+        'polymorphic_identity': 'MultipleChoiceQuestion'
+    }
+
+
+class Internal1DRangeQuestion(InternalAbstractQuestion):
+    maximum_segments = Column(Integer)
+    minimum_segments = Column(Integer)
+    choices = Column(JSON)
+    freeform_allowed = Column(Boolean)
+    can_overlap = Column(Boolean)
+    __mapper_args__ = {
+        'polymorphic_identity': '1DRangeQuestion'
+    }
+
+class

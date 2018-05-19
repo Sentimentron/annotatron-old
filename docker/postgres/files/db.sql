@@ -81,13 +81,50 @@ CREATE TABLE IF NOT EXISTS an_annotations (
 );
 
 CREATE TABLE IF NOT EXISTS an_questions (
-  id bigserial PRIMARY KEY,
-  human_prompt text NOT NULL,
-  kind text NOT NULL,
-  summary_code text NOT NULL,
-  created timestamptz NOT NULL DEFAULT 'now',
-  annotation_instructions text,
-  detailed_annotation_instructions text
+  id      BIGSERIAL PRIMARY KEY,
+  content JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS an_questions (
+  id                               BIGSERIAL PRIMARY KEY,
+  human_prompt                     TEXT        NOT NULL,
+  kind                             TEXT        NOT NULL,
+  summary_code                     TEXT        NOT NULL,
+  created                          TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  annotation_instructions          TEXT,
+  detailed_annotation_instructions TEXT,
+  -- This field is left under-specified, see the OpenAPI spec for what this field contains.
+  question_content                 JSONB
+);
+
+CREATE TABLE IF NOT EXISTS an_multiple_choice_questions (
+  question_id BIGINT PRIMARY KEY REFERENCES an_questions(id),
+  choices jsonb NOT NULL,
+  CHECK(json_array_length(choices) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS an_1d_range_questions (
+  question_id BIGINT PRIMARY KEY REFERENCES an_questions (id),
+  minimum_segments INT NULL,
+  maximum_segments INT NULL,
+  choices jsonb NOT NULL,
+  freeform_allowed boolean NOT NULL,
+  can_overlap boolean NOT NULL,
+  CHECK(minimum_segments < maximum_segments),
+  -- Not allowing free-form input implies that choice is not NULL
+  CHECK(json_array_length(choices) > 0 || freeform_allowed)
+);
+
+CREATE TABLE IF NOT EXISTS an_1d_segmentation_questions (
+  question_id BIGINT PRIMARY KEY REFERENCES an_questions (id),
+  minimum_segments INT NULL,
+  maximum_segments INT NULL,
+  choices jsonb NOT NULL,
+  freeform_allowed boolean NOT NULL,
+  can_overlap boolean NOT NULL,
+  CHECK(minimum_segments < maximum_segments),
+  -- Not allowing free-form input implies that choice is not NULL
+  CHECK(json_array_length(choices) > 0 || freeform_allowed)
 );
 
 CREATE TABLE IF NOT EXISTS an_assignments (
