@@ -57,6 +57,7 @@ CREATE INDEX IF NOT EXISTS an_corpora_name ON an_corpora(name);
 -- Primary asset table.
 CREATE TABLE IF NOT EXISTS an_assets (
   id bigserial PRIMARY KEY,
+  name text NOT NULL,
   content bytea NOT NULL,
   metadata jsonb,
   date_uploaded timestamptz NOT NULL DEFAULT 'now',
@@ -64,15 +65,10 @@ CREATE TABLE IF NOT EXISTS an_assets (
   checksum text NOT NULL,
   mime_type text NOT NULL,
   type_description text NOT NULL,
-  CHECK(sha512(content) = checksum)
-);
-
-CREATE TABLE IF NOT EXISTS an_asset_corpus_xref (
-  id bigserial PRIMARY KEY,
-  asset_id bigint NOT NULL REFERENCES an_assets(id),
   corpus_id bigint NOT NULL REFERENCES an_corpora(id),
-  unique_name text NOT NULL,
-  unique(corpus_id, unique_name)
+  uploader_id bigint NOT NULL REFERENCES an_users(id),
+  CHECK(sha512(content) = checksum),
+  UNIQUE(name, corpus_id)
 );
 
 CREATE TABLE IF NOT EXISTS an_annotations (

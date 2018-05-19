@@ -9,11 +9,11 @@ import bcrypt
 import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
-    LoginResponse, AnnotatronUser, UserKind, Corpus
+    LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import User, Token, DbCorpus
+from models import InternalUser, InternalToken, InternalCorpus, InternalAsset
 
 Session = sessionmaker()
 
@@ -24,34 +24,34 @@ class TokenController:
         self.storage = storage
 
     def clean_expired_tokens(self):
-        self.storage.query(Token).filter(Token.expires < datetime.utcnow()).delete()
+        self.storage.query(InternalToken).filter(InternalToken.expires < datetime.utcnow()).delete()
 
-    def remove_tokens_for_user(self, user: User):
-        self.storage.query(Token).filter(Token.user_id == user.id).delete()
+    def remove_tokens_for_user(self, user: InternalUser):
+        self.storage.query(InternalToken).filter(InternalToken.user_id == user.id).delete()
         self.storage.commit()
 
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
-        return self.storage.query(Token).filter(Token.expires > datetime.utcnow()).filter_by(token=token).count() == 1
+        return self.storage.query(InternalToken).filter(InternalToken.expires > datetime.utcnow()).filter_by(token=token).count() == 1
 
-    def get_user_from_token(self, token: str) -> User:
-        matches = self.storage.query(Token).filter_by(token=token)
+    def get_user_from_token(self, token: str) -> InternalUser:
+        matches = self.storage.query(InternalToken).filter_by(token=token)
         if matches.count() > 0:
             return matches.first().user
 
-    def get_token_for_user(self, user: User) -> Token:
+    def get_token_for_user(self, user: InternalUser) -> InternalToken:
         self.clean_expired_tokens()
-        matches = self.storage.query(Token).filter_by(user_id=user.id)
+        matches = self.storage.query(InternalToken).filter_by(user_id=user.id)
         if matches.count() > 0:
             return matches.first()
 
-    def get_or_create_token_for_user(self, user: User) -> Token:
+    def get_or_create_token_for_user(self, user: InternalUser) -> InternalToken:
         token = self.get_token_for_user(user)
         if not token:
             return self.issue_token(user)
         return token
 
-    def issue_token(self, to_user: User) -> Token:
+    def issue_token(self, to_user: InternalUser) -> InternalToken:
         key = None
         while True:
             self.storage.begin(subtransactions=True)
@@ -61,12 +61,12 @@ class TokenController:
             if self.check_token(key):
                 self.storage.rollback()
                 continue
-            t = Token(user_id=to_user.id, expires=datetime.now() + timedelta(days=7), token=key)
+            t = InternalToken(user_id=to_user.id, expires=datetime.now() + timedelta(days=7), token=key)
             self.storage.add(t)
             self.storage.commit()
             break
 
-        return self.storage.query(Token).filter_by(token=key).first()
+        return self.storage.query(InternalToken).filter_by(token=key).first()
 
 
 class UserController:
@@ -85,17 +85,17 @@ class UserController:
             return True
         return False
 
-    def get_user_from_id(self, id: int) -> User:
+    def get_user_from_id(self, id: int) -> InternalUser:
         return self.get_all_users().filter_by(id=id).first()
 
     def get_all_users(self):
-        return self.storage.query(User).filter_by(deactivated_on=None)
+        return self.storage.query(InternalUser).filter_by(deactivated_on=None)
 
     def check_credentials(self, lr: LoginRequest) -> bool:
         user = self.get_user(lr.username)
         return bcrypt.checkpw(lr.password.encode("utf8"), user.password)
 
-    def get_user(self, username: str) -> User:
+    def get_user(self, username: str) -> InternalUser:
         return self.get_all_users().filter_by(username=username).first()
 
     def _create_user(self, rq: NewUserRequest, reset_needed=False) -> ValidationError:
@@ -108,7 +108,7 @@ class UserController:
         # Encrypt, salt user password
         password_hash = bcrypt.hashpw(rq.password.encode("utf8"), bcrypt.gensalt())
 
-        u = User(
+        u = InternalUser(
             username = rq.username,
             role = rq.role.value,
             password = password_hash,
@@ -125,7 +125,7 @@ class UserController:
         #self.storage.commit()
         return None
 
-    def create_user(self, new_user: NewUserRequest, requesting_user: User):
+    def create_user(self, new_user: NewUserRequest, requesting_user: InternalUser):
         if requesting_user.role != UserKind.ADMINISTRATOR.value:
             return ValidationError([FieldError("_meta", "requesting user is not administrator", False)])
 
@@ -138,7 +138,7 @@ class UserController:
         rq.role = UserKind.ADMINISTRATOR
         return self._create_user(rq, reset_needed=False)
 
-    def change_password(self, user: User, old_password: str, new_password: str, check_password: bool) -> ValidationError:
+    def change_password(self, user: InternalUser, old_password: str, new_password: str, check_password: bool) -> ValidationError:
         if check_password:
             # Check the credentials
             status = bcrypt.checkpw(old_password.encode("utf8"), user.password)
@@ -160,14 +160,13 @@ class CorpusController:
         self.storage = storage
 
     def get_identifiers(self) -> [str]:
-        return [x.name for x in self.storage.query(DbCorpus).all()]
+        return [x.name for x in self.storage.query(InternalCorpus).all()]
 
-    def get_corpus_from_identifier(self, id:str) -> Corpus:
-        obj = self.storage.query(DbCorpus).filter_by(name=id).first()
-        return Corpus(obj.name, obj.description, obj.created, obj.copyright_usage_restrictions, obj.id)
+    def get_corpus_from_identifier(self, id:str) -> InternalCorpus:
+        return self.storage.query(InternalCorpus).filter_by(name=id).first()
 
     def create_corpus(self, c: Corpus):
-        c = DbCorpus(
+        c = InternalCorpus(
             name=c.name,
             description=c.description,
             copyright_usage_restrictions=c.copyright
@@ -175,6 +174,36 @@ class CorpusController:
         self.storage.add(c)
         self.storage.commit()
 
+
+class AssetController:
+    def __init__(self, storage: Session):
+        self.storage = storage
+
+    def create_asset(self, a: BinaryAsset, c: InternalCorpus, id: str, uploader: InternalUser):
+        """
+        Creates an asset from the external representation and saves it.
+        :param a: An external representation (BinaryAsset)
+        :param c: An internal Corpus object
+        :param id: The distinct name for this asset in corpus c
+        :param uploader: The user who's uploading the asset.
+        :return: ValidationError if something went wrong.
+        """
+        c = InternalAsset(
+            name=id,
+            content=a.content,
+            metadata=a.metadata,
+            copyright_usage_restrictions=a.copyright,
+            checksum=a.checksum,
+            mime_type=a.mime_type,
+            type_description=a.type_description.value,
+            corpus_id=c.id,
+            uploader_id=uploader.id
+        )
+
+        # TODO: check the integrity of the Asset
+
+        self.storage.add(c)
+        self.storage.commit(c)
 
 class CurrentUserResource:
 
@@ -337,7 +366,12 @@ class CorpusResource:
         if not id:
             resp.obj = c.get_identifiers()
         else:
-            resp.obj = c.get_corpus_from_identifier(id)
+            obj = c.get_corpus_from_identifier()
+            resp.obj = Corpus(obj.name,
+                              obj.description,
+                              obj.created,
+                              obj.copyright_usage_restrictions,
+                              obj.id)
 
     def on_post(self, req, resp):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
@@ -347,6 +381,18 @@ class CorpusResource:
         c.create_corpus(new_corpus)
         resp.status = falcon.HTTP_201
 
+
+class AssetResource:
+
+    def on_post(self, req, resp, corpus_id, asset_id):
+        if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
+            raise falcon.HTTPForbidden("Must be admin or staff")
+        asset_controller = AssetController(req.session)
+        corpus_controller = CorpusController(req.session)
+        destination_corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
+        new_asset = BinaryAsset.from_json(req.body)
+        asset_controller.create_asset(new_asset, destination_corpus, asset_id, req.user)
+        resp.status = falcon.HTTP_201
 
 class GetSessionTokenComponent:
 

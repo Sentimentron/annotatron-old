@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, LargeBinary, Enum, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, LargeBinary, Enum, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -7,7 +7,7 @@ import datetime
 Base = declarative_base()
 
 
-class User(Base):
+class InternalUser(Base):
     __tablename__ = "an_users"
 
     id = Column(Integer, primary_key=True)
@@ -25,7 +25,7 @@ class User(Base):
     tokens = relationship('Token')
 
 
-class Token(Base):
+class InternalToken(Base):
     __tablename__ = "an_user_tokens"
 
     id = Column(Integer, primary_key=True)
@@ -35,7 +35,7 @@ class Token(Base):
     user = relationship("User", back_populates="tokens")
 
 
-class DbCorpus(Base):
+class InternalCorpus(Base):
     __tablename__ = "an_corpora"
 
     id = Column(Integer, primary_key=True)
@@ -43,3 +43,21 @@ class DbCorpus(Base):
     description = Column(String, nullable=True)
     created = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
     copyright_usage_restrictions = Column(String)
+
+class InternalAsset(Base):
+    __tablename__ = "an_assets"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    content = Column(LargeBinary)
+    metadata = Column(JSON)
+    date_uploaded = Column(DateTime, nullable=True, default=datetime.datetime.utcnow()).
+    copyright_usage_restrictions = Column(String)
+    checksum = Column(String)
+    mime_type = Column(String)
+    type_description = Column(String)
+    corpus_id = Column(Integer, ForeignKey("an_corpora.id"))
+    uploader_id = Column(Integer, ForeignKey("an_users.id"))
+
+    corpus = relationship("DbCorpus", back_populates="assets")
+    uploader = relationship("User", back_populates="uploaded_assets")

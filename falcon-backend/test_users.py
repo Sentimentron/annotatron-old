@@ -4,7 +4,7 @@ from main import create_app
 from sqlalchemy import create_engine
 from sqlalchemy import exc
 from sqlalchemy.orm import sessionmaker
-from models import User, Token
+from models import InternalUser, InternalToken
 import logging
 import os
 import sys
@@ -80,8 +80,8 @@ class MyTestCase(testing.TestCase):
         self.session = Session(bind=self.connection)
 
         self.app = create_app(self.connection)
-        self.session.query(Token).delete()
-        self.session.query(User).delete()
+        self.session.query(InternalToken).delete()
+        self.session.query(InternalUser).delete()
         self.session.commit()
 
     def tearDown(self):
