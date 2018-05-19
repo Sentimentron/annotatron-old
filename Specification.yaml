@@ -481,7 +481,7 @@ paths:
                   type: integer
                   format: int64
 
-  /assignment/byAssetAndCorpus/{corpusId}/{assetId}:
+  /assignment/byAssetAndCorpus/{corpusName}/{assetName}:
     get:
       tags:
         - assignment
@@ -489,13 +489,12 @@ paths:
       description: >-
         Retrieve the `Assignments` assigned to a user.
       parameters:
-        - name: corpusId
-          in: path
+        - in: path
+          name: corpusName
           schema:
-            type: integer
-            format: int64
+            type: string
           required: true
-        - name: assetId
+        - name: assetName
           in: path
           schema:
             type: integer
@@ -512,7 +511,7 @@ paths:
                   type: integer
                   format: int64
 
-  /corpus/{corpusId}/assets/{assetId}:
+  /corpus/{corpusName}/assets/{assetName}:
     put:
       tags:
         - asset
@@ -522,17 +521,17 @@ paths:
         Inserts an `Asset` into Annotatron. No de-duplication is provided (use the `HEAD` method to check.) The `id` field is ignored.
       parameters:
       - in: path
-        name: corpusId
+        name: corpusName
         schema:
           type: string
         required: true
-        description: The `id` of the `Corpus` that's being modified.
+        description: The unique name of the `Corpus` that's being modified.
       - in: path
-        name: assetId
+        name: assetName
         schema:
           type: string
         required: true
-        description: The id of the `Asset` that's being deleted.
+        description: The unique name of the `Asset` that's being deleted.
       requestBody:
         content:
           application/json:
@@ -554,17 +553,17 @@ paths:
         * The Asset's metadata and content may persist in storage, but will not be accessible.
       parameters:
         - in: path
-          name: corpusId
+          name: corpusName
           schema:
             type: string
           required: true
-          description: The `id` of the `Corpus` that's being modified.
+          description: The unique name of the `Corpus` that's being modified.
         - in: path
-          name: assetId
+          name: assetName
           schema:
             type: string
           required: true
-          description: The id of the `Asset` that's being deleted.
+          description: The unique name of the `Asset` that's being deleted inside the `Corpus`.
       responses:
         202:
           description: Successfully deleted.
@@ -583,17 +582,17 @@ paths:
         Retrieves some metadata about the Asset, such as when it was uploaded.
       parameters:
         - in: path
-          name: corpusId
+          name: corpusName
           schema:
             type: string
           required: true
           description: The `id` of the `Corpus` that's being modified.
         - in: path
-          name: assetId
+          name: assetName
           schema:
             type: string
           required: true
-          description: The id of the `Asset` that's being deleted.
+          description: The unique name of the `Asset` inside the `Corpus`.
       responses:
         200:
           description: Asset details successfully retrieved.
@@ -602,7 +601,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/BinaryAssetDescription'
 
-  /corpus/{corpusId}/assets/{assetId}/content:
+  /assets/{assetId}/content:
     get:
       tags:
         - asset
@@ -611,17 +610,13 @@ paths:
         Retrieves the bytes that make up an `Asset`.
       parameters:
         - in: path
-          name: corpusId
-          schema:
-            type: string
-          required: true
-          description: The `id` of the `Corpus` that's being modified.
-        - in: path
           name: assetId
           schema:
-            type: string
+            type: integer
+            format: int64
           required: true
-          description: The id of the `Asset` that's being deleted.
+          description: The obfuscated id of the `Asset`. Retrieved from `BinaryAssetDescription.id`
+          
       responses:
         200:
           description: Asset content successfully retrieved.
@@ -631,7 +626,7 @@ paths:
                 type: string
                 format: binary
 
-  /corpus/{corpusId}/assets:
+  /corpus/{corpusName}/assets:
     get:
         tags:
           - corpus
@@ -640,10 +635,10 @@ paths:
         description: >-
           Retrieves the `Asset`s that make up a `Corpus`.
         parameters:
-          - name: corpusId
+          - name: corpusName
             in: path
             required: true
-            description: The identifier of the `Corpus` to link with.
+            description: The identifier of the `Corpus` to look in.
             schema:
               type: string
         responses:
@@ -653,37 +648,8 @@ paths:
               application/json:
                 schema:
                   $ref: "#/components/schemas/Corpus"
-    post:
-      description: >-
-        Attempts to find an `Asset` that matches some of the fields specified
-        in the request body. It returns a list of identifiers referring to `Asset`s where anything matches. These can be checked against the `/asset/{id}` response.
-      tags:
-        - asset
-      operationId: matchAssetFromPartialUpload
-      parameters:
-          - name: corpusId
-            in: path
-            required: true
-            description: The identifier of the `Corpus` to link with.
-            schema:
-              type: string
-      requestBody:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BinaryAssetDescription'
-      responses:
-        200:
-          description: "Some `Assets` matched the query."
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: integer
-                  format: int64
 
-  /corpus/{corpusId}/{assetId}/{summaryId}:
+  /corpus/{corpusName}/{assetName}/{summaryId}:
     put:
       operationId: attachQuestionToAssetInCorpus
       tags:
@@ -692,13 +658,13 @@ paths:
         Attaches a `Question` object to a an `Asset` in a `Corpus` for human
         annotation.
       parameters:
-        - name: corpusId
+        - name: corpusName
           in: path
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
             type: string
-        - name: assetId
+        - name: assetName
           in: path
           required: true
           description: The identifier of the `Asset` to add.
@@ -725,13 +691,13 @@ paths:
       description: >-
         This retrieves a list of identifiers which map to `Questions` via the `questions/{id}` endpoint.
       parameters:
-        - name: corpusId
+        - name: corpusName
           in: path
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
             type: string
-        - name: assetId
+        - name: assetName
           in: path
           required: true
           description: The identifier of the `Asset` to add.
@@ -751,7 +717,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Question"
 
-  /corpus/{corpusId}/{assetId}:
+  /corpus/{corpusName}/{assetName}:
     delete:
       tags:
         - asset
@@ -759,14 +725,14 @@ paths:
       operationId: unlinkAssetWithCorpus
       description: Removes an `Asset` from a `Corpus`
       parameters:
-        - name: corpusId
+        - name: corpusName
           in: path
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
             type: integer
             format: int64
-        - name: assetId
+        - name: assetName
           in: path
           required: true
           description: The identifier of the `Asset` to add.
@@ -789,14 +755,14 @@ paths:
       operationId: linkAssetWithCorpus
       description: Links an `Asset` with a `Corpus`
       parameters:
-        - name: corpusId
+        - name: corpusName
           in: path
           required: true
           description: The identifier of the `Corpus` to link with.
           schema:
             type: integer
             format: int64
-        - name: assetId
+        - name: assetName
           in: path
           required: true
           description: The identifier of the `Asset` to add.
@@ -812,7 +778,7 @@ paths:
         201:
           description: Link successfully generated.
 
-  /corpus/{corpusId}:
+  /corpus/{corpusName}:
     get:
       tags:
         - corpus
@@ -820,7 +786,7 @@ paths:
       description: >-
         Retrieves details about a Corpus
       parameters:
-        - name: corpusId
+        - name: corpusName
           in: path
           required: true
           description: The identifier of the `Corpus` to link with.
@@ -1027,19 +993,19 @@ components:
       type: object
       required:
         - uniqueName
-        - assetId
-        - corpusId
+        - assetName
+        - corpusName
       description: >-
         Represents a link between an `Asset` and a `Corpus`.
-        `assetId` and `corpusId` are not mandatory on upload.
+        `assetName` and `corpusName` are not mandatory on upload.
       properties:
         uniqueName:
           type: string
           description: User-provided name that uniquely identifies this Asset in the target corpus.
-        assetId:
+        assetName:
           type: integer
           format: int64
-        corpusId:
+        corpusName:
           type: integer
           format: int64
 
