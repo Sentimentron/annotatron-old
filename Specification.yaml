@@ -1,7 +1,23 @@
 openapi: 3.0.0
 info:
   title: Annotatron
-  description: Annotatron describes, displays, processes, visualizes, and allows humans to annotate machine learning corpora.
+  description: >-
+    Annotatron describes, displays, processes, visualizes, and allows humans to annotate machine learning corpora.
+
+    ## Definitions
+
+    These terms have special meaning for Annotatron:
+
+
+    _Application-global ID_:
+
+    > Any user can access a resource using this identifier and get the same ID. This ID is used for most system objects used by _Staff_ and _Administrator_ users.
+
+
+    _User-specific ID_:
+
+    > Only the user who received the identifier can retrieve the resource. This is used for objects accessed by _Annotator_ and _Reviewer_ useres. You can translate these to an _Application-global ID_ using the `/auth/id` end-point.
+
   version: 0.1.0
 
 servers:
@@ -14,17 +30,6 @@ tags:
   - name: annotation
     description: >-
       Annotations are what we're trying to derive from Annotatron.
-  - name: assignment
-    description: >-
-      `Assignments` are `Question`s about `Asset`s delivered to humans, and approved by `Reviewer`.
-  - name: question
-    description: >-
-      `Question`s in Annotatron are prompts given to a human. Humans give the response, and it's recorded for later aggreation. Typically,
-      multiple Annotators will respond and the resulting Annotation will be summarized for export.
-  - name: corpus
-    description: >-
-      `Asset`s are stored in `Corpus` collections, which are used to organize datasets for annotation and training.
-      Corpora collect and organize Assets to create a dataset used for annotation and training.
   - name: asset
     description: >-
 
@@ -33,12 +38,32 @@ tags:
 
       Each `Asset` can be part of more than one corpus, for example a database of photos can be annotated
       with age in one `Corpus`, and expression in another.
+
+  - name: assignment
+    description: >-
+      `Assignments` are `Question`s about `Asset`s delivered to humans, and approved by `Reviewer`.
   - name: auth
     description: >-
       This tag collects API methods which are used for authentication, authorization, and anything to do with logging in, logging out, general security stuff.
   - name: conf
     description: >-
       This tag collects endpoints which are used to control the system.
+  - name: corpus
+    description: >-
+      `Asset`s are stored in `Corpus` collections, which are used to organize datasets for annotation and training.
+      Corpora collect and organize Assets to create a dataset used for annotation and training.
+  - name: question
+    description: >-
+      `Question`s in Annotatron are prompts given to a human. Humans give the response, and it's recorded for later aggreation. Typically,
+      multiple Annotators will respond and the resulting Annotation will be summarized for export.
+
+  - name: needsImplementation
+    description: >-
+      These are endpoints which are defined, but not implemented.
+
+  - name: needsTesting
+    description: >-
+      These are endpoints which need test coverage
 
 paths:
 
@@ -49,6 +74,7 @@ paths:
         - auth
       description: >-
         Checks whether this Annotatron instances requires initial set-up or not. Returns false if everything's normal. No Authorization is needed.
+
       operationId: checkNeedsSetup
       responses:
         200:
@@ -89,6 +115,8 @@ paths:
       operationId: createAnnotation
       tags:
         - annotation
+        - needsImplementation
+        - needsTesting
       description: >-
         Validates and creates a new `Annotation`.
       requestBody:
@@ -111,6 +139,8 @@ paths:
       operationId: validateAnnotation
       tags:
         - annotation
+        - needsImplementation
+        - needsTesting
       description: >-
         Validates an `Annotation`.
       requestBody:
@@ -133,6 +163,8 @@ paths:
       operationId: deleteAnnotation
       tags:
         - annotation
+        - needsImplementation
+        - needsTesting
       description: >-
         Removes an `Annotation`
       parameters:
@@ -171,6 +203,8 @@ paths:
       operationId: deleteAuthToken
       tags:
         - auth
+        - needsImplementation
+        - needsTesting
       description: >-
         Signs the current user out.
       responses:
@@ -280,7 +314,7 @@ paths:
         - auth
       operationId: listUsers
       description: >-
-        Retrieve's all application-global user identifiers. Can be done by a `Staff` or higher.
+        Retrieves all application-global user identifiers. Can be done by a `Staff` or higher.
       responses:
         200:
           description: "Successful"
@@ -313,6 +347,8 @@ paths:
       operationId: createAssignment
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       description: >-
         Adds an `Assignment` to Annotatron, which links a `Question` about an `Asset` in a given `Corpus` to a `User`
       requestBody:
@@ -332,6 +368,8 @@ paths:
     put:
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       operationId: submitAssignment
       description: >-
         When called by an `Annotator` with the `submit` keyword, this records the response of the assignment.
@@ -361,6 +399,8 @@ paths:
     post:
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       description: >-
         Checks that an `Assignment` meets all the requirements.
       operationId: validateAssignment
@@ -383,6 +423,8 @@ paths:
     put:
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       description: >-
         When called by an `Reviewer`, this records the response of the assignment.
       operationId: approveAssignment
@@ -413,6 +455,8 @@ paths:
       operationId: getAssignment
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       description: >-
         Retrieve the details of an `Assignment`.
       parameters:
@@ -460,6 +504,8 @@ paths:
     get:
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       operationId: listAssignmentsByUser
       description: >-
         Retrieve the `Assignments` assigned to a user.
@@ -485,6 +531,8 @@ paths:
     get:
       tags:
         - assignment
+        - needsImplementation
+        - needsTesting
       operationId: listAssignmentsByAssetAndCorpus
       description: >-
         Retrieve the `Assignments` assigned to a user.
@@ -515,6 +563,7 @@ paths:
     put:
       tags:
         - asset
+        - needsTesting
       operationId: createAsset
       summary: Adds an `Asset` to a `Corpus`
       description: >-
@@ -543,6 +592,8 @@ paths:
     delete:
       tags:
         - asset
+        - needsTesting
+        - needsImplementation
       summary: Deletes an `Asset` from a `Corpus`.
       operationId: deleteAssetWithId
       description: >-
@@ -576,6 +627,7 @@ paths:
     get:
       tags:
         - asset
+        - needsTesting
       summary: Retrieve information about an Asset
       operationId: getAssetInfoWithId
       description: >-
@@ -586,7 +638,7 @@ paths:
           schema:
             type: string
           required: true
-          description: The `id` of the `Corpus` that's being modified.
+          description: The `id` of the `Corpus` that's being accessed.
         - in: path
           name: assetName
           schema:
@@ -605,6 +657,8 @@ paths:
     get:
       tags:
         - asset
+        - needsImplementation
+        - needsTesting
       operationId: getAssetContentWithId
       description: >-
         Retrieves the bytes that make up an `Asset`.
@@ -616,7 +670,7 @@ paths:
             format: int64
           required: true
           description: The obfuscated id of the `Asset`. Retrieved from `BinaryAssetDescription.id`
-          
+
       responses:
         200:
           description: Asset content successfully retrieved.
@@ -631,6 +685,8 @@ paths:
         tags:
           - corpus
           - asset
+          - needsImplementation
+          - needsTesting
         operationId: getAssetsByCorpusId
         description: >-
           Retrieves the `Asset`s that make up a `Corpus`.
@@ -654,6 +710,8 @@ paths:
       operationId: attachQuestionToAssetInCorpus
       tags:
         - question
+        - needsImplementation
+        - needsTesting
       description: >-
         Attaches a `Question` object to a an `Asset` in a `Corpus` for human
         annotation.
@@ -688,6 +746,8 @@ paths:
       operationId: retrieveQuestionFromAssetInCorpus
       tags:
         - question
+        - needsImplementation
+        - needsTesting
       description: >-
         This retrieves a list of identifiers which map to `Questions` via the `questions/{id}` endpoint.
       parameters:
@@ -717,66 +777,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Question"
 
-  /corpus/{corpusName}/{assetName}:
-    delete:
-      tags:
-        - asset
-        - corpus
-      operationId: unlinkAssetWithCorpus
-      description: Removes an `Asset` from a `Corpus`
-      parameters:
-        - name: corpusName
-          in: path
-          required: true
-          description: The identifier of the `Corpus` to link with.
-          schema:
-            type: integer
-            format: int64
-        - name: assetName
-          in: path
-          required: true
-          description: The identifier of the `Asset` to add.
-          schema:
-            type: integer
-            format: int64
-      responses:
-        202:
-          description: Link deleted.
-        422:
-          description: Link could not be delete due to possible data loss.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataLossReason'
-    post:
-      tags:
-        - asset
-        - corpus
-      operationId: linkAssetWithCorpus
-      description: Links an `Asset` with a `Corpus`
-      parameters:
-        - name: corpusName
-          in: path
-          required: true
-          description: The identifier of the `Corpus` to link with.
-          schema:
-            type: integer
-            format: int64
-        - name: assetName
-          in: path
-          required: true
-          description: The identifier of the `Asset` to add.
-          schema:
-            type: integer
-            format: int64
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssetCorpusLink'
-      responses:
-        201:
-          description: Link successfully generated.
 
   /corpus/{corpusName}:
     get:
@@ -845,6 +845,8 @@ paths:
     post:
       tags:
         - question
+        - needsImplementation
+        - needsTesting
       operationId: createQuestion
       description: >-
         Inserts a `Question` into Annotatron.
@@ -861,10 +863,13 @@ paths:
       responses:
         201:
           description: "Successfully inserted."
+
   /question/{id}:
     get:
       tags:
         - question
+        - needsImplementation
+        - needsTesting
       operationId: getQuestion
       description: >-
         Retrieves a `Question` from Annotatron.

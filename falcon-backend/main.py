@@ -9,7 +9,7 @@ import bcrypt
 import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
-    LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset
+    LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset, BinaryAssetDescription, BinaryAssetKind
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -179,7 +179,16 @@ class AssetController:
     def __init__(self, storage: Session):
         self.storage = storage
 
-    def create_asset(self, a: BinaryAsset, c: InternalCorpus, id: str, uploader: InternalUser):
+    def get_asset(self, c: InternalCorpus, id: str) -> InternalAsset:
+        """
+        Retrieves an `Asset` from the database.
+        :param c: An internal Corpus object
+        :param id: The unique name of the Asset inside c
+        :return: An InternalAsset
+        """
+        return self.storage.query(InternalAsset).filter_by(corpus=c).filter_by(name=id).first()
+
+    def create_asset(self, a: BinaryAsset, c: InternalCorpus, id: str, uploader: InternalUser) -> ValidationError:
         """
         Creates an asset from the external representation and saves it.
         :param a: An external representation (BinaryAsset)
@@ -200,10 +209,9 @@ class AssetController:
             uploader_id=uploader.id
         )
 
-        # TODO: check the integrity of the Asset
-
         self.storage.add(c)
         self.storage.commit(c)
+
 
 class CurrentUserResource:
 
@@ -393,6 +401,24 @@ class AssetResource:
         new_asset = BinaryAsset.from_json(req.body)
         asset_controller.create_asset(new_asset, destination_corpus, asset_id, req.user)
         resp.status = falcon.HTTP_201
+
+    def on_get(self, req, resp, corpus_id, asset_id):
+        if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
+            raise falcon.HTTPForbidden("Must be admin or staff")
+        asset_controller = AssetController(req.session)
+        corpus_controller = CorpusController(req.session)
+        corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
+        asset = asset_controller.get_asset(corpus, asset_id)
+        resp.obj = BinaryAssetDescription(
+            asset.mime_type,
+            BinaryAssetKind(asset.type_description),
+            asset.copyright_usage_restrictions,
+            asset.checksum,
+            req.obfuscate_int64_field(asset.uploader_id),
+            asset.date_uploaded,
+            req.obfuscate_int64_field(asset.id),
+            asset.metadata
+        )
 
 class GetSessionTokenComponent:
 
