@@ -60,26 +60,8 @@ services:
       - ./../annotatron/annotatron/static:/usr/share/nginx/static-html
     ports:
       - 80:80
-    depends_on:
-      - annotatron-service
     networks:
       - public-network
-      - isolation-network
-
-  annotatron-service:
-    build:
-      context: annotatron
-    image: annotatron_image
-    container_name: AN_annotatron
-    volumes:
-      - ./../annotatron:/annotatron
-      - ./annotatron/entrypoint.sh:/entrypoint.sh
-    depends_on:
-      - postgres-service
-      - postgres-test-service
-    environment:
-      AN_OPENFAAS_URL: ${AN_OPENFAAS_URL}
-    networks:
       - isolation-network
 
   functron-service:

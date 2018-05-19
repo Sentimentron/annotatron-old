@@ -2,11 +2,15 @@ from falcon import testing
 import falcon
 from main import create_app
 from sqlalchemy import create_engine
+from sqlalchemy.pool import QueuePool
 from sqlalchemy import exc
 from sqlalchemy.orm import sessionmaker
 from models import InternalUser, InternalToken
 import logging
+import gc
 import os
+import random
+import string
 import sys
 
 from pyannotatron.models import AnnotatronUser, UserKind, NewUserRequest, LoginResponse, LoginRequest
@@ -35,19 +39,25 @@ class MyTestCase(testing.TestCase):
             raise e
         return True
 
-    @property
-    def db_name(self):
-        return "annotatron_test_{}".format(len(self.id()))
-        #return self.id().replace('.', '')
+    @classmethod
+    def generate_db_name(cls):
+        database_suffix = ''.join(random.sample(string.ascii_lowercase, 8))
+        return "annotatron_test_{}".format(database_suffix)
 
     def try_create_testing_db(self):
         """
         Copies the current Annotatron database schema to a blank new one.
         :return: An engine pointing at the new schema
         """
+
+        gc.collect()
         # Create the testing database
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/postgres",
                              isolation_level="AUTOCOMMIT").connect()
+
+        self.db_name = self.generate_db_name()
+        logging.info("Creating database %s...", self.db_name)
+
         conn.execute("CREATE DATABASE {}".format(self.db_name))
         conn.close()
 
@@ -61,6 +71,7 @@ class MyTestCase(testing.TestCase):
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/{}".format(self.db_name),
                              isolation_level="AUTOCOMMIT")
         conn.execute(database_statements)
+        conn.dispose()
 
         # Create a connection with the default isolation level
         conn = create_engine("postgresql+psycopg2://annotatron:annotatron@localhost:5432/{}".format(self.db_name))
@@ -69,7 +80,8 @@ class MyTestCase(testing.TestCase):
     def setUp(self):
         super(MyTestCase, self).setUp()
 
-        self.try_drop_existing_db()
+        self.db_name = None
+
         self.engine = self.try_create_testing_db()
 
         self.connection = self.engine.connect()
@@ -84,10 +96,30 @@ class MyTestCase(testing.TestCase):
         self.session.query(InternalUser).delete()
         self.session.commit()
 
+
     def tearDown(self):
+        self.app = None
         self.session.close()
         self.trans.rollback()
         self.connection.close()
+        self.engine.dispose()
+
+        # From https://stackoverflow.com/questions/4414234/getting-pythons-unittest-results-in-a-teardown-method/39606065#39606065
+        if hasattr(self, '_outcome'):  # Python 3.4+
+            result = self.defaultTestResult()  # these 2 methods have no side effects
+            self._feedErrorsToResult(result, self._outcome.errors)
+        else:  # Python 3.2 - 3.3 or 3.0 - 3.1 and 2.7
+            result = getattr(self, '_outcomeForDoCleanups', self._resultForDoCleanups)
+        error = result.errors
+        failure = result.failures
+        ok = not error and not failure
+
+        gc.collect()
+
+        if not ok:
+            logging.error("Failing database at %s", self.db_name)
+        else:
+            self.try_drop_existing_db()
 
 
 class TestCaseWithDefaultAdmin(MyTestCase):
@@ -102,7 +134,6 @@ class TestCaseWithDefaultAdmin(MyTestCase):
         }
 
         result = self.simulate_post('/conf/initialUser', json=initial_user)
-        print(result.json)
 
         self.assertTrue("token" in result.json)
         self.current_token = result.json["token"]
@@ -117,6 +148,9 @@ class TestCaseWithDefaultAdmin(MyTestCase):
                 headers["Authorization"] = "Bearer {}".format(self.current_token)
         kwargs["headers"] = headers
         return super().simulate_request(*args, **kwargs)
+
+
+class TestCaseOnlyWithDefaultAdmin(TestCaseWithDefaultAdmin):
 
     def test_whoami(self):
         response = self.simulate_get("/auth/whoAmI")
@@ -217,6 +251,8 @@ class TestCaseWithEachUserType(TestCaseWithDefaultAdmin):
             active_user = AnnotatronUser.from_json(response.json)
             self.user_map[user_id] = active_user
 
+class TestPasswordSecurity(TestCaseWithEachUserType):
+
     def switch_to_user_role(self, role: UserKind):
         for user_id in self.user_map:
             if self.user_map[user_id].role == role:
@@ -286,7 +322,6 @@ class TestInitialUserResources(MyTestCase):
         }
 
         result = self.simulate_post('/conf/initialUser', json=initial_user)
-        print(result.json)
 
         self.assertTrue("token" in result.json)
         current = result.json["token"]

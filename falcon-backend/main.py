@@ -191,7 +191,7 @@ class AssetController:
         c = InternalAsset(
             name=id,
             content=a.content,
-            metadata=a.metadata,
+            ueser_metadata=a.metadata,
             copyright_usage_restrictions=a.copyright,
             checksum=a.checksum,
             mime_type=a.mime_type,
@@ -366,7 +366,7 @@ class CorpusResource:
         if not id:
             resp.obj = c.get_identifiers()
         else:
-            obj = c.get_corpus_from_identifier()
+            obj = c.get_corpus_from_identifier(id)
             resp.obj = Corpus(obj.name,
                               obj.description,
                               obj.created,

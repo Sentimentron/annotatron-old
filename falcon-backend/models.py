@@ -22,7 +22,8 @@ class InternalUser(Base):
 
     password_reset_needed = Column(Boolean)
 
-    tokens = relationship('Token')
+    tokens = relationship('InternalToken')
+    uploaded_assets = relationship('InternalAsset')
 
 
 class InternalToken(Base):
@@ -32,7 +33,7 @@ class InternalToken(Base):
     user_id = Column(Integer, ForeignKey('an_users.id'))
     expires = Column(DateTime)
     token = Column(String, unique=True)
-    user = relationship("User", back_populates="tokens")
+    user = relationship("InternalUser", back_populates="tokens")
 
 
 class InternalCorpus(Base):
@@ -43,6 +44,8 @@ class InternalCorpus(Base):
     description = Column(String, nullable=True)
     created = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
     copyright_usage_restrictions = Column(String)
+    assets = relationship("InternalAsset")
+
 
 class InternalAsset(Base):
     __tablename__ = "an_assets"
@@ -50,8 +53,8 @@ class InternalAsset(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String)
     content = Column(LargeBinary)
-    metadata = Column(JSON)
-    date_uploaded = Column(DateTime, nullable=True, default=datetime.datetime.utcnow()).
+    user_metadata = Column(JSON)
+    date_uploaded = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
     copyright_usage_restrictions = Column(String)
     checksum = Column(String)
     mime_type = Column(String)
@@ -59,5 +62,5 @@ class InternalAsset(Base):
     corpus_id = Column(Integer, ForeignKey("an_corpora.id"))
     uploader_id = Column(Integer, ForeignKey("an_users.id"))
 
-    corpus = relationship("DbCorpus", back_populates="assets")
-    uploader = relationship("User", back_populates="uploaded_assets")
+    corpus = relationship("InternalCorpus", back_populates="assets")
+    uploader = relationship("InternalUser", back_populates="uploaded_assets")
