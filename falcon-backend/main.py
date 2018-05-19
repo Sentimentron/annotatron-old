@@ -18,6 +18,17 @@ from models import InternalUser, InternalToken, InternalCorpus, InternalAsset
 Session = sessionmaker()
 
 
+def obfuscate_int64_field(x):
+    cipher = ARC4.new("habppootle")
+    cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
+    return int.from_bytes(cipher.encrypt((x).to_bytes(8, byteorder='big')), 'big')
+
+
+def recover_int64_field(x):
+    cipher = ARC4.new("habppootle")
+    cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
+    return int.from_bytes(cipher.decrypt((int(x)).to_bytes(8, byteorder='big')), byteorder='big')
+
 class TokenController:
 
     def __init__(self, storage: Session):
@@ -179,7 +190,25 @@ class AssetController:
     def __init__(self, storage: Session):
         self.storage = storage
 
-    def get_asset(self, c: InternalCorpus, id: str) -> InternalAsset:
+    def convert_to_external(self, asset: InternalAsset) -> BinaryAssetDescription:
+        """
+        Converts an `Asset` to an external representation.
+        :param asset: The `Asset` to convert.
+        :return: A `BinaryAssetDescription`
+        """
+        return BinaryAssetDescription(
+            asset.mime_type,
+            BinaryAssetKind(asset.type_description),
+            asset.copyright_usage_restrictions,
+            asset.checksum,
+            obfuscate_int64_field(asset.uploader_id),
+            asset.date_uploaded,
+            obfuscate_int64_field(asset.id),
+            asset.metadata
+        )
+
+
+    def get_asset_with_corpus(self, c: InternalCorpus, id: str) -> InternalAsset:
         """
         Retrieves an `Asset` from the database.
         :param c: An internal Corpus object
@@ -187,6 +216,14 @@ class AssetController:
         :return: An InternalAsset
         """
         return self.storage.query(InternalAsset).filter_by(corpus=c).filter_by(name=id).first()
+
+    def get_asset_with_id(self, id: int) -> InternalAsset:
+        """
+        Retrieves an `Asset` from the database with an identifier.
+        :param id:
+        :return:
+        """
+        return self.storage.get(id)
 
     def create_asset(self, a: BinaryAsset, c: InternalCorpus, id: str, uploader: InternalUser) -> ValidationError:
         """
@@ -211,6 +248,10 @@ class AssetController:
 
         self.storage.add(c)
         self.storage.commit(c)
+
+    def delete_asset(self, which: InternalAsset):
+        self.storage.delete(which)
+        self.storage.commit()
 
 
 class CurrentUserResource:
@@ -367,10 +408,52 @@ class TokenResource:
 
 class CorpusResource:
 
-    def on_get(self, req, resp, id=None):
+    def list_all_corpora(self, req, resp, c):
+        resp.obj = c.get_identifiers()
+
+    def get_corpus_by_id(self, req, resp, id, obj):
+
+        resp.obj = Corpus(obj.name,
+                          obj.description,
+                          obj.created,
+                          obj.copyright_usage_restrictions,
+                          obj.id)
+
+    def get_assets_by_corpus_id(self, req, resp, corpus):
+        a = AssetController(req.sesion)
+        assets = corpus.assets
+        resp.obj = [a.convert_to_external(x) for x in assets]
+
+    def get_asset_info_with_id(self, req, resp, corpus, id):
+        controller = AssetController(req.session)
+        asset = controller.get_asset_with_corpus(corpus, id)
+        resp.obj = controller.convert_to_external(asset)
+
+    def on_get(self, req, resp, id=None, property=None, property_value=None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
+
+        routed = False
         c = CorpusController(req.session)
+        if not id:
+            self.list_all_corpora(req, resp, c)
+            routed = True
+        else:
+            corpus = c.get_corpus_from_identifier(id)
+            if not property:
+                self.get_corpus_by_id(req, resp, id, corpus)
+                routed = True
+            else:
+                if property == "assets":
+                    routed = True
+                    if not property_value:
+                        self.get_assets_by_corpus_id(req, resp, corpus)
+                    else:
+                        self.get_asset_info_with_id(req, resp, corpus, property_value)
+
+        if not routed:
+            raise falcon.HTTPNotFound()
+
         if not id:
             resp.obj = c.get_identifiers()
         else:
@@ -381,44 +464,61 @@ class CorpusResource:
                               obj.copyright_usage_restrictions,
                               obj.id)
 
-    def on_post(self, req, resp):
+    def on_delete(self, req, resp, corpus_id:str, corpus_property:str, corpus_value:str): #deleteAssetWithId
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
-        c = CorpusController(req.session)
-        new_corpus = Corpus.from_json(req.body)
-        c.create_corpus(new_corpus)
-        resp.status = falcon.HTTP_201
 
+        if corpus_property != "assets":
+            raise falcon.HTTPNotFound()
 
-class AssetResource:
+        self.delete_asset_with_id(req, resp, corpus_id, corpus_value)
 
-    def on_post(self, req, resp, corpus_id, asset_id):
-        if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
-            raise falcon.HTTPForbidden("Must be admin or staff")
-        asset_controller = AssetController(req.session)
+    def delete_asset_with_id(self, req, resp, corpus_id: str, asset_id: str):
         corpus_controller = CorpusController(req.session)
+        asset_controller = AssetController(req.session)
+
+        corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
+        asset = asset_controller.get_asset_with_corpus(corpus, asset_id)
+        if not asset_controller.delete_asset(asset):
+            raise falcon.HTTPInternalServerError("Could not delete Asset")
+        resp.status = falcon.status.HTTP_ACCEPTED
+
+    def create_asset(self, req, resp, corpus_id:str, asset_id:str):
+        corpus_controller = CorpusController(req.session)
+        asset_controller = AssetController(req.sesion)
         destination_corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
         new_asset = BinaryAsset.from_json(req.body)
         asset_controller.create_asset(new_asset, destination_corpus, asset_id, req.user)
         resp.status = falcon.HTTP_201
 
-    def on_get(self, req, resp, corpus_id, asset_id):
+    def create_corpus(self, req, resp):
+        c = CorpusController(req.session)
+        new_corpus = Corpus.from_json(req.body)
+        c.create_corpus(new_corpus)
+        resp.status = falcon.HTTP_201
+
+    def on_post(self, req, resp, corpus_id:str=None, corpus_property:str=None, corpus_value:str=None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
+
+        if not corpus_id:
+            self.create_corpus(req, resp)
+        elif corpus_property != "assets":
+            raise falcon.HTTPNotFound()
+        else:
+            self.create_asset(req, resp, corpus_id, corpus_value)
+        
+
+class AssetResource:
+
+    def on_get(self, req, resp, asset_id):
+        if req.user is None:
+            raise falcon.HTTP_FORBIDDEN("Must be logged in")
         asset_controller = AssetController(req.session)
-        corpus_controller = CorpusController(req.session)
-        corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
-        asset = asset_controller.get_asset(corpus, asset_id)
-        resp.obj = BinaryAssetDescription(
-            asset.mime_type,
-            BinaryAssetKind(asset.type_description),
-            asset.copyright_usage_restrictions,
-            asset.checksum,
-            req.obfuscate_int64_field(asset.uploader_id),
-            asset.date_uploaded,
-            req.obfuscate_int64_field(asset.id),
-            asset.metadata
-        )
+        asset = asset_controller.get_asset_with_id(req.recover_int64_field(asset_id))
+        resp.content_type = asset.mime_type
+        resp.body = asset.content
+
 
 class GetSessionTokenComponent:
 
@@ -431,6 +531,8 @@ class GetSessionTokenComponent:
 
             t = TokenController(req.session)
             req.user = t.get_user_from_token(auth)
+
+        # TODO: restrict URL choice in here
 
 
 class ObfuscationComponent:
@@ -504,8 +606,10 @@ class JSONTranslatorComponent(object):
         try:
             if resp.obj is not None:
                 try:
-                    logging.info(json.dumps(resp.obj.to_json()))
-                    resp.body = json.dumps(resp.obj.to_json())
+                    if type(resp.obj) == list:
+                        resp.body = json.dumps([x.to_json() for x in resp.obj])
+                    else:
+                        resp.body = json.dumps(resp.obj.to_json())
                 except AttributeError:
                     resp.body = json.dumps(resp.obj)
         except AttributeError:
