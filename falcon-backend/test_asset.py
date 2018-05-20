@@ -32,11 +32,14 @@ class TestAssetLifecycleUpload(TestAssetLifecycleBase):
         self.assertEqual(response.json, [])
 
 
-class TestAssetLifecycleWithDefaultFile(TestAssetLifecycleBase):
+class TestAssetLifecycleWithDefaultFileBase(TestAssetLifecycleBase):
 
     def setUp(self):
         super().setUp()
         self.create_default_asset()
+
+
+class TestAssetLifecycleWithDefaultFile(TestAssetLifecycleWithDefaultFileBase):
 
     def test_fetch_list(self):
         response = self.simulate_get("/corpus/test_corpus/assets")
