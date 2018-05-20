@@ -1005,15 +1005,20 @@ components:
 
     Assignment:
       required:
-        - userId
         - question
-        - reviewerId
         - created
+        - assets
+        - assignedAnnotatorId
       properties:
-        id:
+        assets:
           type: integer
           format: int64
-        userId:
+          description: "The Assets that will be displayed for this question."
+        assignedUserId:
+          type: integer
+          format: int64
+          description: "The user who's problem this task is."
+        assignedAnnotatorId:
           type: integer
           format: int64
           description: "The user who will complete the question"
@@ -1027,11 +1032,6 @@ components:
           description: >-
             Who will review this `Assignment`. If unset, or set to 0,
             the assignment will be automatically approved.
-        actualReviewerId:
-          type: integer
-          format: int64
-          description: >-
-            Contains the UserId of the person who actually reviewed the task.
         created:
           type: string
           format: datetime
@@ -1049,12 +1049,6 @@ components:
           type: string
         reviewerNotes:
           type: string
-        originalAnnotationId:
-          type: integer
-          format: int64
-        correctedAnnotationId:
-          type: integer
-          format: int64
 
     BinaryAssetDescription:
       title: BinaryAsset
