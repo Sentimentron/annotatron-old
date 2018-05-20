@@ -109,94 +109,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
-
-  /annotation:
-    post:
-      operationId: createAnnotation
-      tags:
-        - annotation
-        - needsImplementation
-        - needsTesting
-      description: >-
-        Validates and creates a new `Annotation`.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Annotation"
-      responses:
-        201:
-          description: "Created"
-        422:
-          description: "Validation error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ValidationError"
-
-  /annotation/validate:
-    post:
-      operationId: validateAnnotation
-      tags:
-        - annotation
-        - needsImplementation
-        - needsTesting
-      description: >-
-        Validates an `Annotation`.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Annotation"
-      responses:
-        202:
-          description: "No validation messages"
-        422:
-          description: "Validation error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ValidationError"
-
-  /annotation/{annotationId}:
-    delete:
-      operationId: deleteAnnotation
-      tags:
-        - annotation
-        - needsImplementation
-        - needsTesting
-      description: >-
-        Removes an `Annotation`
-      parameters:
-        - name: annotationId
-          in: path
-          schema:
-            type: integer
-            format: int64
-          required: true
-      responses:
-        202:
-          description: Removed
-    get:
-      operationId: getAnnotation
-      tags:
-        - annotation
-      description: Retrieves an `Annotation`
-      parameters:
-        - name: annotationId
-          in: path
-          schema:
-            type: integer
-            format: int64
-          required: true
-      responses:
-        200:
-          description: "Successful"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Annotation"
-
   /auth/token:
 
     delete:
@@ -364,15 +276,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessfulInsert'
 
-  /assignment/{assignmentId}/submit:
-    put:
+  /assignment/{assignmentId}:
+    patch:
       tags:
         - assignment
         - needsImplementation
         - needsTesting
       operationId: submitAssignment
       description: >-
-        When called by an `Annotator` with the `submit` keyword, this records the response of the assignment.
+
+        When called by the user who's in the `assignedAnnotatorId` field, saves and validates the `response` field and sends it for review.
+
+        When called by the user who's in the `assignedReviewerId` field, completes review.
       parameters:
         - name: assignmentId
           in: path
@@ -394,63 +309,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
-
-  /assignment/validate:
-    post:
-      tags:
-        - assignment
-        - needsImplementation
-        - needsTesting
-      description: >-
-        Checks that an `Assignment` meets all the requirements.
-      operationId: validateAssignment
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Assignment'
-      responses:
-        202:
-          description: "No errors"
-        422:
-          description: "Validation error"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
-
-  /assignment/{assignmentId}/approve:
-    put:
-      tags:
-        - assignment
-        - needsImplementation
-        - needsTesting
-      description: >-
-        When called by an `Reviewer`, this records the response of the assignment.
-      operationId: approveAssignment
-      parameters:
-        - name: assignmentId
-          in: path
-          schema:
-            type: integer
-            format: int64
-          required: true
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Assignment'
-      responses:
-        204:
-          description: "Updated successfully"
-        422:
-          description: "Validation error"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidationError'
-
-  /assignment/{assignmentId}:
     get:
       operationId: getAssignment
       tags:
@@ -499,7 +357,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/DataLossReason'
 
-
   /assignment/byUser/{userId}:
     get:
       tags:
@@ -511,38 +368,6 @@ paths:
         Retrieve the `Assignments` assigned to a user.
       parameters:
         - name: userId
-          in: path
-          schema:
-            type: integer
-            format: int64
-          required: true
-      responses:
-        200:
-          description: "Available assignments."
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: integer
-                  format: int64
-
-  /assignment/byAssetAndCorpus/{corpusName}/{assetName}:
-    get:
-      tags:
-        - assignment
-        - needsImplementation
-        - needsTesting
-      operationId: listAssignmentsByAssetAndCorpus
-      description: >-
-        Retrieve the `Assignments` assigned to a user.
-      parameters:
-        - in: path
-          name: corpusName
-          schema:
-            type: string
-          required: true
-        - name: assetName
           in: path
           schema:
             type: integer
