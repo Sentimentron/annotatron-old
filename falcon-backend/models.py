@@ -86,6 +86,39 @@ class InternalAsset(Base):
 """
 
 
+class InternalAssignmentAssetXRef(Base):
+
+    __tablename__ = "an_assignments_assets_xref"
+    id = Column(Integer, primary_key=True)
+    asset_id = Column(Integer, ForeignKey("an_assets.id"))
+    assignment_id = Column(Integer, ForeignKey("an_assignments.id"))
+
+    assignment = relationship("InternalAssignment", back_populates="asset_refs")
+    asset = relationship("InternalAsset")
+
+
+class InternalAssignment(Base):
+
+    __tablename__ = "an_assignments"
+    id = Column(Integer, primary_key=True)
+    summary_code=Column(String, nullable=False)
+
+    asset_refs = relationship("InternalAssignmentAssetXRef")
+    assigned_user_id = Column(Integer, ForeignKey("an_users.id"), nullable=True)
+    assigned_annotator_id = Column(Integer, ForeignKey("an_users.id"))
+    question = Column(JSON, nullable=False)
+    response = Column(JSON)
+    assigned_reviewer_id = Column(Integer, ForeignKey("an_users.id"), nullable=True)
+    created = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
+    completed = Column(DateTime, nullable=True)
+    reviewed = Column(DateTime, nullable=True)
+    annotator_notes = Column(String, nullable=True)
+    reviewer_notes = Column(String, nullable=True)
+
+    assigned_user = relationship("InternalUser", back_populates="assignments")
+    assigned_reviewer = relationship("InternalUser")
+
+
 class InternalQuestion(Base):
 
     __tablename__ = "an_questions"

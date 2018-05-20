@@ -10,11 +10,12 @@ import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
     LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset, BinaryAssetDescription, BinaryAssetKind, \
-    AbstractQuestion, Question, SuccessfulInsert
+    AbstractQuestion, Question, SuccessfulInsert, Assignment, Annotation
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import InternalUser, InternalToken, InternalCorpus, InternalAsset, InternalQuestion
+from models import InternalUser, InternalToken, InternalCorpus, InternalAsset, InternalQuestion,\
+    InternalAssignment, InternalAssignmentAssetXRef
 
 Session = sessionmaker()
 
@@ -29,6 +30,122 @@ def recover_int64_field(x):
     cipher = ARC4.new("habppootle")
     cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
     return int.from_bytes(cipher.decrypt((int(x)).to_bytes(8, byteorder='big')), byteorder='big')
+
+
+class AssignmentController:
+
+    def __init__(self, storage):
+        self.storage = storage
+
+    def convert(self, a:InternalAssignment) -> Assignment:
+        converted_assets = [x.asset_id for x in a.asset_refs]
+        ret = Assignment(
+            assets=converted_assets,
+            assigned_annotator_id=a.assigned_annotator_id,
+            assigned_user_id=a.assigned_user_id,
+            question=Question.from_json(a.question),
+            response=None,
+            created=a.created,
+            assigned_reviewer_id=a.assigned_reviewer_id,
+            completed=a.completed,
+            reviewed=a.reviewed,
+            annotator_notes=a.annotator_notes,
+            reviewer_notes=a.reviewer_notes,
+        )
+        if a.response:
+            ret.response = Annotation.from_json(a.response)
+        return a
+
+    def create_assigment(self, a:Assignment) -> (SuccessfulInsert, ValidationError):
+        """
+        Checks an Assignment for issues, then logs it into the database.
+        :param a:
+        :return: (SuccessfulInsert, None) on Success.
+        """
+
+        resolved_xrefs = []
+        asset_controller = AssetController(self.storage)
+        for id in a.assets:
+            asset = asset_controller.get_asset_with_id(id)
+            if asset is None:
+                return None, ValidationError([FieldError("assets", "Could not resolve one or more Assets")])
+            xref = InternalAssignmentAssetXRef(asset=asset)
+            resolved_xrefs.append(xref)
+            self.storage.add(xref)
+
+        an = InternalAssignment(
+            summary_code=a.question.summary_code,
+            assigned_user_id=a.assigned_annotator_id,
+            assigned_annotator_id=a.assigned_annotator_id,
+            question=a.question.to_json(),
+            response=None,
+            assigned_reviewer_id=a.assigned_reviewer_id,
+            created=datetime.utcnow()
+        )
+
+        self.storage.begin_nested()
+        self.storage.add(an)
+        self.storage.commit()
+
+        for x in resolved_xrefs:
+            x.assignment = an
+        self.storage.commit()
+
+    def retrieve_assignment(self, non_obfuscated_id: int) -> InternalAssignment:
+        return self.storage.query(InternalAssignment).get(non_obfuscated_id)
+
+    def retrieve_assignments_for_user(self, non_obfuscated_id: int) -> [InternalAssignment]:
+        user_controller = UserController(self.storage)
+        user = user_controller.get_user_from_id(non_obfuscated_id)
+        return self.storage.query(InternalAssignment).filter_by(assigned_user=user)
+
+    def _update_assignment_send_to_reviewer(self, db_assignment:InternalAssignment, a:InternalAssignment) -> ValidationError:
+
+        # TODO: check for problems
+        db_assignment.response = a.response
+        db_assignment.annotator_notes = a.annotator_notes
+        db_assignment.completed = datetime.utcnow()
+
+        db_assignment.assigned_user_id = db_assignment.assigned_reviewer_id
+
+        self.storage.commit()
+
+        pass
+
+    def _update_assignment_return_to_annotator(self, db_assignment: InternalAssignment, a:InternalAssignment) -> ValidationError:
+
+        db_assignment.reviewer_notes = a.reviewer_notes
+        db_assignment.assigned_user_id = db_assignment.assigned_annotator_id
+        db_assignment.completed = None
+
+        self.storage.commit()
+
+        pass
+
+    def _update_assignment_finalize(self, db_assignment: InternalAssignment, a:InternalAssignment) -> ValidationError:
+        db_assignment.reviewer_notes = a.reviewer_notes
+        db_assignment.assigned_user_id = None
+        db_assignment.reviewed = datetime.utcnow()
+
+        self.storage.commit()
+
+    def update_assignment(self, non_obfuscated_id:int, a:InternalAssignment, current_user: InternalUser) -> ValidationError:
+        db_assignment = self.retrieve_assignment(non_obfuscated_id)
+        if db_assignment.assigned_annotator_id == current_user.id:
+            if not db_assignment.assigned_reviewer_id:
+                return self._update_assignment_finalize(db_assignment, a)
+            else:
+                return self._update_assignment_send_to_reviewer(db_assignment, a)
+        elif db_assignment.assigned_reviewer_id == current_user.id:
+            if a.assigned_user_id == db_assignment.assigned_annotator_id:
+                return self._update_assignment_return_to_annotator(db_assignment, a)
+            else:
+                return self._update_assignment_finalize(db_assignment, a)
+
+    def delete_assignment(self, non_obfuscated_id:int) -> ValidationError:
+        db_assignment = self.retrieve_assignment(non_obfuscated_id)
+        self.storage.remove(db_assignment)
+        self.storage.commit()
 
 
 class TokenController:
@@ -593,6 +710,55 @@ class AssetResource:
         if asset.type_description == BinaryAssetKind.UTF8_TEXT.value:
             resp.encoding = "utf8"
 
+class AssignmentResource:
+
+    def on_post(self, req, resp):
+        new_assignment = Assignment.from_json(req.body)
+        assignment_controller = AssignmentController(req.session)
+        insert, error = assignment_controller.create_assigment(new_assignment)
+        if insert:
+            resp.obj = insert
+            resp.status = falcon.HTTP_CREATED
+        else:
+            resp.obj = error
+            resp.status = falcon.HTTP_NOT_ACCEPTABLE
+
+    def on_get(self, req, resp, arg1, arg2=None):
+        assignment_controller = AssignmentController(req.session)
+        if arg1 == "byUser":
+            if not arg2:
+                raise falcon.HTTPNotFound()
+            if req.user.role != UserKind.ADMINISTRATOR.value \
+                    and req.user.role != UserKind.STAFF.value:
+                if arg2 != req.user.id:
+                    raise falcon.HTTPForbidden()
+                key = req.user.random_seed
+            else:
+                key = None
+            arg2 = req.recover_int64_field(arg2)
+            response = assignment_controller.retrieve_assignments_for_user(arg2)
+
+            ret = {
+                "forReview": [],
+                "forAnnotation": []
+            }
+            for r in response:
+                if r.assigned_reviewer_id == req.user.id:
+                    ret["forReview"].append(req.obfuscate_int64_field(r.id, key))
+                else:
+                    ret["forAnnotation"].append(req.obfuscate_int64_field(r.id, key))
+
+            resp.obj = ret
+        else:
+            if req.user.role != UserKind.ADMINISTRATOR.value \
+                    and req.user.role != UserKind.STAFF.value:
+                key = req.user.random_seed
+            else:
+                key = None
+            assignment_id = req.recover_int64_field(arg1, key)
+            assignment = assignment_controller.retrieve_assignment(assignment_id)
+            resp.obj = assignment_controller.convert(assignment)
+
 
 class GetSessionTokenComponent:
 
@@ -614,13 +780,17 @@ class ObfuscationComponent:
 
     def process_request(self, req, resp):
         # TODO: make me an environmnent variable
-        def obfuscate_int64_field(x):
-            cipher = ARC4.new("habppootle")
+        def obfuscate_int64_field(x, key=None):
+            if not key:
+                key = "habppootle"
+            cipher = ARC4.new(key)
             cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
             return int.from_bytes(cipher.encrypt((x).to_bytes(8, byteorder='big')), 'big')
 
-        def recover_int64_field(x):
-            cipher = ARC4.new("habppootle")
+        def recover_int64_field(x, key=None):
+            if not key:
+                key = "habppootle"
+            cipher = ARC4.new(key)
             cipher.encrypt(b'\xbe\x89\xd0\xb1 \xb8\x99\xbd')
             return int.from_bytes(cipher.decrypt((int(x)).to_bytes(8, byteorder='big')), byteorder='big')
 
