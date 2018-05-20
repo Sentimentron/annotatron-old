@@ -450,14 +450,13 @@ class CorpusResource:
         resp.obj = Corpus(obj.name,
                           obj.description,
                           obj.created,
-                          obj.copyright_usage_restrictions,
-                          obj.id)
+                          obj.copyright_usage_restrictions)
 
     def get_assets_by_corpus_id(self, req, resp, corpus):
         assets = corpus.assets
         resp.obj = [x.name for x in assets]
 
-    def get_asset_info_with_id(self, req, resp, corpus, id):
+    def get_asset_info_with_id(self, req, resp, corpus, id: str):
         controller = AssetController(req.session)
         asset = controller.get_asset_with_corpus(corpus, id)
         resp.obj = controller.convert_to_external(asset)
@@ -465,9 +464,6 @@ class CorpusResource:
     def on_get(self, req, resp, corpus_id=None, corpus_property=None, property_value=None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
-
-        if property_value:
-            property_value = recover_int64_field(int(property_value))
 
         routed = False
         c = CorpusController(req.session)
@@ -499,8 +495,6 @@ class CorpusResource:
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
-        property_value = recover_int64_field(int(property_value))
-
         if corpus_property == "assets":
             self.delete_asset_with_id(req, resp, corpus_id, property_value)
         elif corpus_property == "questions":
@@ -508,7 +502,7 @@ class CorpusResource:
         else:
             raise falcon.HTTPNotFound()
 
-    def delete_asset_with_id(self, req, resp, corpus_id: str, asset_id: int):
+    def delete_asset_with_id(self, req, resp, corpus_id: str, asset_id: str):
         corpus_controller = CorpusController(req.session)
         asset_controller = AssetController(req.session)
 
@@ -532,9 +526,11 @@ class CorpusResource:
         c.create_corpus(new_corpus)
         resp.status = falcon.HTTP_201
 
-    def delete_question_with_id(self, req, resp, corpus_id: str, question_id: int):
+    def delete_question_with_id(self, req, resp, corpus_id: str, question_id: str):
         corpus_controller = CorpusController(req.session)
         question_controller = QuestionController(req.session)
+
+        question_id = recover_int64_field(int(question_id))
 
         corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
         question = question_controller.retrieve_question(corpus, int(question_id))
@@ -557,6 +553,7 @@ class CorpusResource:
 
     def get_question(self, req, resp, corpus: InternalCorpus, question_id: int):
         qc = QuestionController(req.session)
+        question_id = req.recover_int64_field(int(question_id))
         resp.obj = qc.convert_to_external(qc.retrieve_question(corpus, question_id))
 
     def on_post(self, req, resp, corpus_id: str = None, corpus_property: str = None, property_value: str = None):
