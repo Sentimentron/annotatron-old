@@ -43,6 +43,11 @@ class TokenController:
         self.storage.query(InternalToken).filter(InternalToken.user_id == user.id).delete()
         self.storage.commit()
 
+    def delete_token(self, token: str):
+        matches = self.storage.query(InternalToken).filter_by(token=token)
+        self.storage.remove(matches)
+        self.storage.commit()
+
     def check_token(self, token) -> bool:
         self.clean_expired_tokens()
         return self.storage.query(InternalToken).filter(InternalToken.expires > datetime.utcnow()).filter_by(
@@ -439,6 +444,11 @@ class TokenResource:
             resp.media = None
         return resp
 
+    def on_delete(self, req, resp):
+        t = TokenController(req.session)
+        t.delete_token(req.token)
+        resp.status = falcon.HTTP_202
+
 
 class CorpusResource:
 
@@ -595,6 +605,7 @@ class GetSessionTokenComponent:
 
             t = TokenController(req.session)
             req.user = t.get_user_from_token(auth)
+            req.token = auth
 
         # TODO: restrict URL choice in here
 
