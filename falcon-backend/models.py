@@ -114,9 +114,11 @@ class InternalAssignment(Base):
     reviewed = Column(DateTime, nullable=True)
     annotator_notes = Column(String, nullable=True)
     reviewer_notes = Column(String, nullable=True)
+    corpus_id = Column(Integer, ForeignKey("an_corpora.id"))
 
-    assigned_user = relationship("InternalUser", back_populates="assignments")
-    assigned_reviewer = relationship("InternalUser")
+    assigned_user = relationship("InternalUser", foreign_keys=[assigned_user_id])
+    assigned_reviewer = relationship("InternalUser", foreign_keys=[assigned_reviewer_id])
+    corpus = relationship("InternalCorpus")
 
 
 class InternalQuestion(Base):

@@ -149,6 +149,12 @@ class TestCaseWithDefaultAdmin(MyTestCase):
         kwargs["headers"] = headers
         return super().simulate_request(*args, **kwargs)
 
+    def get_current_user_id(self):
+        response = self.simulate_get("/auth/whoAmI")
+        self.assertEqual(response.status_code, 302)
+        location = response.headers["location"]
+        return location.split('/')[-1]
+
 
 class TestCaseOnlyWithDefaultAdmin(TestCaseWithDefaultAdmin):
 
@@ -162,12 +168,6 @@ class TestCaseOnlyWithDefaultAdmin(TestCaseWithDefaultAdmin):
         self.assertEqual(u.username, "admin")
         self.assertEqual(u.email, "admin@test.com")
         self.assertEqual(u.role, UserKind.ADMINISTRATOR)
-
-    def get_current_user_id(self):
-        response = self.simulate_get("/auth/whoAmI")
-        self.assertEqual(response.status_code, 302)
-        location = response.headers["location"]
-        return location.split('/')[-1]
 
     def test_password_self_change(self):
         """

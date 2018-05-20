@@ -92,10 +92,14 @@ CREATE TABLE IF NOT EXISTS an_questions (
 
 CREATE TABLE IF NOT EXISTS an_assignments (
   id bigserial PRIMARY KEY,
-  question_id bigint NOT NULL REFERENCES an_questions(id),
-  user_id bigint NOT NULL REFERENCES an_users(id),
+  summary_code text NOT NULL,
+  question jsonb NOT NULL,
+  response jsonb,
+  assigned_annotator_id bigint NOT NULL REFERENCES an_users(id),
+  assigned_user_id bigint NOT NULL REFERENCES an_users(id),
   assigned_reviewer_id bigint REFERENCES an_users(id),
   actual_reviewer_id bigint REFERENCES an_users(id),
+  corpus_id bigint NOT NULL references an_corpora(id),
   created timestamptz NOT NULL DEFAULT 'now',
   completed timestamptz,
   reviewed timestamptz,
@@ -105,5 +109,10 @@ CREATE TABLE IF NOT EXISTS an_assignments (
   corrected_annotation_id bigint REFERENCES an_annotations(id)
 );
 
+CREATE TABLE IF NOT EXISTS an_assignments_assets_xref (
+  id            BIGSERIAL PRIMARY KEY,
+  assignment_id BIGINT REFERENCES an_assignments (id),
+  asset_id      BIGINT REFERENCES an_assets (id)
+);
 
 --CREATE INDEX IF NOT EXISTS an_annotations_asset_summary_code_idx ON an_annotations (asset_id, summary_code, source);

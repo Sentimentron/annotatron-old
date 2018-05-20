@@ -56,7 +56,7 @@ class AssignmentController:
             ret.response = Annotation.from_json(a.response)
         return a
 
-    def create_assigment(self, a:Assignment) -> (SuccessfulInsert, ValidationError):
+    def create_assigment(self, a:Assignment, c:InternalCorpus) -> (SuccessfulInsert, ValidationError):
         """
         Checks an Assignment for issues, then logs it into the database.
         :param a:
@@ -68,7 +68,7 @@ class AssignmentController:
         for id in a.assets:
             asset = asset_controller.get_asset_with_id(id)
             if asset is None:
-                return None, ValidationError([FieldError("assets", "Could not resolve one or more Assets")])
+                return None, ValidationError([FieldError("assets", "Could not resolve one or more Assets", False)])
             xref = InternalAssignmentAssetXRef(asset=asset)
             resolved_xrefs.append(xref)
             self.storage.add(xref)
@@ -80,7 +80,8 @@ class AssignmentController:
             question=a.question.to_json(),
             response=None,
             assigned_reviewer_id=a.assigned_reviewer_id,
-            created=datetime.utcnow()
+            created=datetime.utcnow(),
+            corpus=c
         )
 
         self.storage.begin_nested()
@@ -94,12 +95,15 @@ class AssignmentController:
     def retrieve_assignment(self, non_obfuscated_id: int) -> InternalAssignment:
         return self.storage.query(InternalAssignment).get(non_obfuscated_id)
 
+    def retrieve_assignments_for_corpus(self, corpus: InternalCorpus) -> [InternalAssignment]:
+        return self.storage.query(InternalAssignment).filter_by(corpus_id=corpus.id)
+
     def retrieve_assignments_for_user(self, non_obfuscated_id: int) -> [InternalAssignment]:
         user_controller = UserController(self.storage)
         user = user_controller.get_user_from_id(non_obfuscated_id)
         return self.storage.query(InternalAssignment).filter_by(assigned_user=user)
 
-    def _update_assignment_send_to_reviewer(self, db_assignment:InternalAssignment, a:InternalAssignment) -> ValidationError:
+    def _update_assignment_send_to_reviewer(self, db_assignment:InternalAssignment, a:Assignment) -> ValidationError:
 
         # TODO: check for problems
         db_assignment.response = a.response
@@ -112,7 +116,7 @@ class AssignmentController:
 
         pass
 
-    def _update_assignment_return_to_annotator(self, db_assignment: InternalAssignment, a:InternalAssignment) -> ValidationError:
+    def _update_assignment_return_to_annotator(self, db_assignment: InternalAssignment, a:Assignment) -> ValidationError:
 
         db_assignment.reviewer_notes = a.reviewer_notes
         db_assignment.assigned_user_id = db_assignment.assigned_annotator_id
@@ -122,14 +126,14 @@ class AssignmentController:
 
         pass
 
-    def _update_assignment_finalize(self, db_assignment: InternalAssignment, a:InternalAssignment) -> ValidationError:
+    def _update_assignment_finalize(self, db_assignment: InternalAssignment, a:Assignment) -> ValidationError:
         db_assignment.reviewer_notes = a.reviewer_notes
         db_assignment.assigned_user_id = None
         db_assignment.reviewed = datetime.utcnow()
 
         self.storage.commit()
 
-    def update_assignment(self, non_obfuscated_id:int, a:InternalAssignment, current_user: InternalUser) -> ValidationError:
+    def update_assignment(self, non_obfuscated_id:int, a:Assignment, current_user: InternalUser) -> ValidationError:
         db_assignment = self.retrieve_assignment(non_obfuscated_id)
         if db_assignment.assigned_annotator_id == current_user.id:
             if not db_assignment.assigned_reviewer_id:
@@ -710,18 +714,36 @@ class AssetResource:
         if asset.type_description == BinaryAssetKind.UTF8_TEXT.value:
             resp.encoding = "utf8"
 
+
 class AssignmentResource:
 
-    def on_post(self, req, resp):
+    def on_post(self, req, resp, arg1: str):
+        corpus_name = arg1
         new_assignment = Assignment.from_json(req.body)
+        corpus_controller = CorpusController(req.session)
+        corpus = corpus_controller.get_corpus_from_identifier(corpus_name)
         assignment_controller = AssignmentController(req.session)
-        insert, error = assignment_controller.create_assigment(new_assignment)
+        insert, error = assignment_controller.create_assigment(new_assignment, corpus)
         if insert:
             resp.obj = insert
             resp.status = falcon.HTTP_CREATED
         else:
             resp.obj = error
             resp.status = falcon.HTTP_NOT_ACCEPTABLE
+
+    def on_patch(self, req, resp, arg1):
+        key = None
+        if req.user.role != UserKind.ADMINISTRATOR.value \
+                and req.user.role != UserKind.STAFF.value:
+            key = req.user.random_seed
+
+        database_id = req.recover_int64_field(arg1, key)
+        assignment_controller = AssignmentController(req.session)
+        database_assignment = assignment_controller.retrieve_assignment(database_id)
+        decoded_assigment = Assignment.from_json(req.body)
+
+        assignment_controller.update_assignment(database_id, )
+
 
     def on_get(self, req, resp, arg1, arg2=None):
         assignment_controller = AssignmentController(req.session)
@@ -749,6 +771,29 @@ class AssignmentResource:
                     ret["forAnnotation"].append(req.obfuscate_int64_field(r.id, key))
 
             resp.obj = ret
+        elif arg1 == "byCorpus":
+            if not arg2:
+                raise falcon.HTTPNotFound()
+            if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
+                raise falcon.HTTPForbidden()
+            corpus_controller = CorpusController(req.session)
+            corpus = corpus_controller.get_corpus_from_identifier(arg2)
+            assignment_controller = AssignmentController(req.session)
+            response = assignment_controller.retrieve_assignments_for_corpus(corpus)
+
+            ret = {
+                "forReview": [],
+                "forAnnotation": [],
+                "completed": []
+            }
+            for r in response:
+                if r.completed and r.reviewed:
+                    ret["completed"].append(req.obfuscate_int64_field(r.id))
+                elif not r.reviewed:
+                    ret["forReview"].append(req.obfuscate_int64_field(r.id))
+                else:
+                    ret["completed"].append(req.obfuscate_int64_field(r.id))
+            ret.obj = ret
         else:
             if req.user.role != UserKind.ADMINISTRATOR.value \
                     and req.user.role != UserKind.STAFF.value:
@@ -878,7 +923,9 @@ def create_app(engine=None):
     app.add_route("/corpus/{corpus_id}", CorpusResource())
     app.add_route("/corpus/{corpus_id}/{corpus_property}", CorpusResource())
     app.add_route("/corpus/{corpus_id}/{corpus_property}/{property_value}", CorpusResource())
-    app.add_route("/asset/{asset_id:int}/content", AssetResource())
+    app.add_route("/asset/{asset_id:int}/content", AssetResource()),
+    app.add_route("/assignments/{arg1}/{arg2}", AssignmentResource()),
+    app.add_route("/assignments/{arg1}", AssignmentResource()),
 
     return app
 
