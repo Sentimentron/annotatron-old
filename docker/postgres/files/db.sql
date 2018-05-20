@@ -81,11 +81,13 @@ CREATE TABLE IF NOT EXISTS an_annotations (
 );
 
 CREATE TABLE IF NOT EXISTS an_questions (
-  id      BIGSERIAL PRIMARY KEY,
-  kind    text NOT NULL,
-  content JSONB NOT NULL,
-  created timestamptz NOT NULL default 'now',
-  creator_id bigint NOT NULL REFERENCES an_users(id)
+  id         BIGSERIAL PRIMARY KEY,
+  kind       TEXT        NOT NULL,
+  content    JSONB       NOT NULL,
+  summary_code TEXT NOT NULL,
+  created    TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  creator_id BIGINT      NOT NULL REFERENCES an_users (id),
+  corpus_id  BIGINT      NOT NULL REFERENCES an_corpora (id)
 );
 
 CREATE TABLE IF NOT EXISTS an_assignments (

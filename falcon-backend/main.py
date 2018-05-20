@@ -257,12 +257,15 @@ class AssetController:
         self.storage.commit()
         return True
 
+
 class QuestionController:
     def __init__(self, storage):
         self.storage = storage
 
-    def create_question(self, creator: InternalUser, corpus: InternalCorpus, question: AbstractQuestion) -> SuccessfulInsert:
-        iq = InternalQuestion(content = question.to_json(), kind=question.kind, creator_id=creator.id, corpus_id=corpus.id, summary_code=question.summary_code)
+    def create_question(self, creator: InternalUser, corpus: InternalCorpus,
+                        question: AbstractQuestion) -> SuccessfulInsert:
+        iq = InternalQuestion(content=question.to_json(), kind=question.kind.value, creator_id=creator.id,
+                              corpus_id=corpus.id, summary_code=question.summary_code)
         self.storage.add(iq)
         self.storage.commit()
 
@@ -271,8 +274,7 @@ class QuestionController:
     def retrieve_questions(self, corpus: InternalCorpus):
         return self.storage.query(InternalQuestion).filter_by(corpus=corpus).all()
 
-    def retrieve_question(self, corpus: InternalCorpus, question_id:int) -> InternalQuestion:
-        question_id = recover_int64_field(question_id)
+    def retrieve_question(self, corpus: InternalCorpus, question_id: int) -> InternalQuestion:
         return self.storage.query(InternalQuestion).filter_by(corpus=corpus).filter_by(id=question_id).first()
 
     def delete_question(self, question: InternalQuestion):
@@ -282,7 +284,7 @@ class QuestionController:
     @classmethod
     def convert_to_external(cls, q: InternalQuestion) -> AbstractQuestion:
         ret = Question.from_json(q.content)
-        ret.id = q.id
+        ret.id = obfuscate_int64_field(q.id)
         return ret
 
 
@@ -464,6 +466,9 @@ class CorpusResource:
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
+        if property_value:
+            property_value = recover_int64_field(int(property_value))
+
         routed = False
         c = CorpusController(req.session)
         if not corpus_id:
@@ -494,18 +499,16 @@ class CorpusResource:
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
             raise falcon.HTTPForbidden("Must be admin or staff")
 
-        corpus_id = recover_int64_field(int(corpus_id))
         property_value = recover_int64_field(int(property_value))
 
-        if corpus_property != "assets":
+        if corpus_property == "assets":
+            self.delete_asset_with_id(req, resp, corpus_id, property_value)
+        elif corpus_property == "questions":
+            self.delete_question_with_id(req, resp, corpus_id, property_value)
+        else:
             raise falcon.HTTPNotFound()
 
-        if corpus_id == "assets":
-            self.delete_asset_with_id(req, resp, corpus_id, property_value)
-        elif corpus_id == "questions":
-            self.delete_question_with_id(req, resp, corpus_id, property_value)
-
-    def delete_asset_with_id(self, req, resp, corpus_id: int, asset_id: int):
+    def delete_asset_with_id(self, req, resp, corpus_id: str, asset_id: int):
         corpus_controller = CorpusController(req.session)
         asset_controller = AssetController(req.session)
 
@@ -529,16 +532,14 @@ class CorpusResource:
         c.create_corpus(new_corpus)
         resp.status = falcon.HTTP_201
 
-    def delete_question_with_id(self, req, resp, corpus_id: str, question_id: str):
-        asset_controller = AssetController(req.session)
+    def delete_question_with_id(self, req, resp, corpus_id: str, question_id: int):
         corpus_controller = CorpusController(req.session)
         question_controller = QuestionController(req.session)
 
         corpus = corpus_controller.get_corpus_from_identifier(corpus_id)
         question = question_controller.retrieve_question(corpus, int(question_id))
         question_controller.delete_question(question)
-
-
+        resp.status = falcon.HTTP_202
 
     def create_question(self, req, resp, corpus_id: str):
         question = Question.from_json(req.body)
@@ -547,16 +548,16 @@ class CorpusResource:
 
         corpus = cc.get_corpus_from_identifier(corpus_id)
         resp.obj = qc.create_question(req.user, corpus, question)
+        resp.obj.id = req.obfuscate_int64_field(resp.obj.id)
         resp.status = falcon.HTTP_201
 
-    def get_questions(self, req, resp, corpus:InternalCorpus):
+    def get_questions(self, req, resp, corpus: InternalCorpus):
         qc = QuestionController(req.session)
         resp.obj = [obfuscate_int64_field(q.id) for q in qc.retrieve_questions(corpus)]
 
-    def get_question(self, req, resp, corpus:InternalCorpus, question_id:int):
-        question_id = recover_int64_field(question_id)
+    def get_question(self, req, resp, corpus: InternalCorpus, question_id: int):
         qc = QuestionController(req.session)
-        resp.obj = qc.retrieve_question(corpus, question_id)
+        resp.obj = qc.convert_to_external(qc.retrieve_question(corpus, question_id))
 
     def on_post(self, req, resp, corpus_id: str = None, corpus_property: str = None, property_value: str = None):
         if req.user.role != UserKind.ADMINISTRATOR.value and req.user.role != UserKind.STAFF.value:
@@ -584,8 +585,6 @@ class AssetResource:
 
         if asset.type_description == BinaryAssetKind.UTF8_TEXT.value:
             resp.encoding = "utf8"
-
-
 
 
 class GetSessionTokenComponent:
