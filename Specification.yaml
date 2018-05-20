@@ -563,7 +563,6 @@ paths:
     put:
       tags:
         - asset
-        - needsTesting
       operationId: createAsset
       summary: Adds an `Asset` to a `Corpus`
       description: >-
@@ -592,8 +591,6 @@ paths:
     delete:
       tags:
         - asset
-        - needsTesting
-        - needsImplementation
       summary: Deletes an `Asset` from a `Corpus`.
       operationId: deleteAssetWithId
       description: >-
@@ -627,7 +624,6 @@ paths:
     get:
       tags:
         - asset
-        - needsTesting
       summary: Retrieve information about an Asset
       operationId: getAssetInfoWithId
       description: >-
@@ -658,7 +654,6 @@ paths:
       tags:
         - asset
         - needsImplementation
-        - needsTesting
       operationId: getAssetContentWithId
       description: >-
         Retrieves the bytes that make up an `Asset`.
@@ -685,8 +680,6 @@ paths:
         tags:
           - corpus
           - asset
-          - needsImplementation
-          - needsTesting
         operationId: getAssetsByCorpusId
         description: >-
           Retrieves the `Asset`s that make up a `Corpus`.
@@ -705,13 +698,11 @@ paths:
                 schema:
                   $ref: "#/components/schemas/Corpus"
 
-  /corpus/{corpusName}/{assetName}/{summaryId}:
-    put:
-      operationId: attachQuestionToAssetInCorpus
+  /corpus/{corpusName}/questions:
+    post:
+      operationId: createQuestion
       tags:
         - question
-        - needsImplementation
-        - needsTesting
       description: >-
         Attaches a `Question` object to a an `Asset` in a `Corpus` for human
         annotation.
@@ -719,19 +710,13 @@ paths:
         - name: corpusName
           in: path
           required: true
-          description: The identifier of the `Corpus` to link with.
+          description: The identifier of the `Corpus` containing the `Asset`
           schema:
             type: string
         - name: assetName
           in: path
           required: true
-          description: The identifier of the `Asset` to add.
-          schema:
-            type: string
-        - name: summaryId
-          in: path
-          required: true
-          description: Summary code to aggregate answers to this `Question`
+          description: The identifier of the `Asset` to add the `Question` to.
           schema:
             type: string
       requestBody:
@@ -742,12 +727,14 @@ paths:
       responses:
         201:
           description: "Successfully created."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessfulInsert"
     get:
-      operationId: retrieveQuestionFromAssetInCorpus
+      operationId: getQuestions
       tags:
         - question
-        - needsImplementation
-        - needsTesting
       description: >-
         This retrieves a list of identifiers which map to `Questions` via the `questions/{id}` endpoint.
       parameters:
@@ -757,25 +744,67 @@ paths:
           description: The identifier of the `Corpus` to link with.
           schema:
             type: string
-        - name: assetName
-          in: path
-          required: true
-          description: The identifier of the `Asset` to add.
-          schema:
-            type: string
-        - name: summaryId
-          in: path
-          required: true
-          description: Summary code to aggregate answers to this `Question`
-          schema:
-            type: string
       responses:
         200:
-          description: A list of question identifiers
+          description: A list of application-global question identifiers.
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+
+  /corpus/{corpusName}/questions/{questionId}:
+    get:
+      operationId: getQuestion
+      tags:
+        - question
+      description: >-
+        This retrieves the full content of a `Question` associated with a corpus.
+
+      parameters:
+        - name: corpusName
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: string
+        - name: questionId
+          in: path
+          required: true
+          description: The application-global identifier of the `Question`.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: Success
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Question"
+    delete:
+      operationId: deleteQuestion
+      tags:
+        - question
+
+      parameters:
+        - name: corpusName
+          in: path
+          required: true
+          description: The identifier of the `Corpus` to link with.
+          schema:
+            type: string
+        - name: questionId
+          in: path
+          required: true
+          description: The application-global identifier of the `Question`.
+          schema:
+            type: integer
+            format: int64
+      responses:
+        202:
+          description: "Accepted for deletion"
+
 
 
   /corpus/{corpusName}:
@@ -826,6 +855,7 @@ paths:
     post:
       tags:
         - corpus
+      operationId: createCorpus
       description: >-
         Adds a new `Corpus` to the database.
       requestBody:
@@ -840,54 +870,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessfulInsert"
-
-  /question:
-    post:
-      tags:
-        - question
-        - needsImplementation
-        - needsTesting
-      operationId: createQuestion
-      description: >-
-        Inserts a `Question` into Annotatron.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - $ref: "#/components/schemas/MultipleChoiceQuestion"
-                - $ref: "#/components/schemas/TimeSeriesRangeQuestion"
-                - $ref: "#/components/schemas/TimeSeriesSegmentationQuestion"
-              discriminator:
-                propertyName: kind
-      responses:
-        201:
-          description: "Successfully inserted."
-
-  /question/{id}:
-    get:
-      tags:
-        - question
-        - needsImplementation
-        - needsTesting
-      operationId: getQuestion
-      description: >-
-        Retrieves a `Question` from Annotatron.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: The identifier of the `Question` to retrieve
-          schema:
-            type: integer
-            format: int64
-      responses:
-        200:
-          description: "Successfully found."
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Question"
 
 components:
   securitySchemes:
@@ -969,6 +951,13 @@ components:
               * `TimeSeriesRangeQuestion`
               * `MultipleChoiceQuestion`
           type: string
+        assets:
+          description: >-
+            This is a list of user-specific IDs which describe the `Asset`s which are going to be displayed for this question.
+          type: array
+          items:
+              type: integer
+              format: int64
 
     Annotation:
       oneOf:
@@ -1017,7 +1006,7 @@ components:
     Assignment:
       required:
         - userId
-        - questionId
+        - question
         - reviewerId
         - created
       properties:
@@ -1027,11 +1016,11 @@ components:
         userId:
           type: integer
           format: int64
-          description: "The user who will complete this task"
-        questionId:
-          type: integer
-          format: int64
-          description: The question this user will complete.
+          description: "The user who will complete the question"
+        question:
+          $ref: "$/components/schemas/Question"
+        response:
+          $ref: "$components/schema/Annotation"
         assignedReviewerId:
           type: integer
           format: int64
