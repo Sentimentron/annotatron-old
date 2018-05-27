@@ -283,18 +283,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessfulInsert'
 
-  /assignments/{assignmentId}:
-    patch:
+  /assignments/{assignmentId}/history:
+    post:
       tags:
         - assignment
         - needsImplementation
         - needsTesting
-      operationId: submitAssignment
+      operationId: createAssignmentUpdate
       description: >-
+        This endpoint mutates an `Assignment`, causing it to change state. This can be to approve, reject, annotate or review it.
 
-        When called by the user who's in the `assignedAnnotatorId` field, saves and validates the `response` field and sends it for review.
-
-        When called by the user who's in the `assignedReviewerId` field, completes review.
       parameters:
         - name: assignmentId
           in: path
@@ -306,16 +304,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Assignment'
+              $ref: '#/components/schemas/AssignmentHistory'
       responses:
-        204:
-          description: "Updated successfully"
-        422:
-          description: "Validation error"
+        202:
+          description: "Accepted"
+    get:
+      tags:
+        - assignment
+        - needsImplementation
+        - needsTesting
+      operationId: retrieveAssignmentHistory
+      description: >-
+        This endpoint retrieves the history and current state for an Assignment.
+
+      parameters:
+        - name: assignmentId
+          in: path
+          schema:
+            type: integer
+            format: in64
+          required: true
+
+      responses:
+        200:
+          description: "Successful"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ValidationError'
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssignmentHistory"
+
+
+  /assignments/{assignmentId}:
     get:
       operationId: getAssignment
       tags:
@@ -338,33 +359,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Assignment"
-    delete:
-      tags:
-        - assignment
-        - needsImplementation
-        - needsTesting
-      operationId: deleteAssignment
-      parameters:
-        - name: assignmentId
-          in: path
-          schema:
-            type: integer
-            format: int64
-          required: true
-        - name: force
-          in: query
-          schema:
-            type: boolean
-      responses:
-        202:
-          description: "Successfully deleted"
-        422:
-          description: >-
-            May cause data loss if deleted. Set `?force=true`
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DataLossReason'
+
 
   /assignments/byUser/{userId}:
     get:
@@ -857,6 +852,59 @@ components:
           type: integer
           format: int64
 
+    AssignmentHistory:
+      description: >-
+
+        This object captures the ongoing work needed to complete an `Assignment`.
+
+        The `response` field is required when moving from the `Created` to the `Annotated` state. It can also be given when moving from the `Annotated` state to the `Reviewed` state.
+
+
+      required:
+        - state
+        - assignedToUser
+        - dateEntered
+      properties:
+        annotation:
+          $ref: '#/components/schemas/Annotation'
+        notes:
+          type: string
+          description: "Free-form notes"
+        state:
+          description: >
+            Created implies that the `Assignment` is waiting for `Assignment.annotatorId` to annotate it.
+
+            `Annotated` implies that the `Assignment` is waiting for `Assignment.reviewerId` to review it.
+
+            `Approved` or `Rejected` implies that the `Assignment` has been sent back to `Assignment.annotatorId` for further changes.
+
+            `Superseded` implies that the underlying `Asset`s' content has been updated, meaning that the `Assignment` needs to be re-annotated by `Assignment.annotatorId`.
+
+            `Deleted` implies that `currentUser` has removed the `Assignment` and that its results should no longer appear.
+          type: string
+          enum:
+            - Created
+            - Annotated
+            - Approved
+            - Rejected
+            - Superseded
+            - Deleted
+        updatedByUser:
+          description: >-
+            Ignored on upload, records the application-global identifier of the user who generated this state change.
+          type: integer
+          format: int64
+        assignedToUser:
+          description: >-
+            Records which user should progress this to the next state. If state is `Approved`, this can be blank.
+          type: integer
+          format: int64
+        dateEntered:
+          description: >-
+            Ignored on upload, this records the UTC time that this update happened.
+          type: string
+          format: datetime
+
     Assignment:
       required:
         - question
@@ -868,19 +916,13 @@ components:
           type: integer
           format: int64
           description: "The Assets that will be displayed for this question."
-        assignedUserId:
-          type: integer
-          format: int64
-          description: "The user who's problem this task is."
-        assignedAnnotatorId:
+        annotatorId:
           type: integer
           format: int64
           description: "The user who will complete the question"
         question:
           $ref: "$/components/schemas/Question"
-        response:
-          $ref: "$components/schema/Annotation"
-        assignedReviewerId:
+        reviewerId:
           type: integer
           format: int64
           description: >-
@@ -889,20 +931,6 @@ components:
         created:
           type: string
           format: datetime
-        completed:
-          type: string
-          format: datetime
-          description: >-
-            Contains the date that the `Assignment` was completed.
-        reviewed:
-          type: string
-          format: datetime
-          description: >-
-            Contains the date that the `Assignment` was reviewed.
-        annotatorNotes:
-          type: string
-        reviewerNotes:
-          type: string
 
     BinaryAssetDescription:
       title: BinaryAsset
