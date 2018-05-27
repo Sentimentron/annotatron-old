@@ -105,20 +105,24 @@ class InternalAssignment(Base):
 
     asset_refs = relationship("InternalAssignmentAssetXRef")
     assigned_user_id = Column(Integer, ForeignKey("an_users.id"), nullable=True)
-    assigned_annotator_id = Column(Integer, ForeignKey("an_users.id"))
     question = Column(JSON, nullable=False)
-    response = Column(JSON)
     assigned_reviewer_id = Column(Integer, ForeignKey("an_users.id"), nullable=True)
     created = Column(DateTime, nullable=True, default=datetime.datetime.utcnow())
-    completed = Column(DateTime, nullable=True)
-    reviewed = Column(DateTime, nullable=True)
-    annotator_notes = Column(String, nullable=True)
-    reviewer_notes = Column(String, nullable=True)
     corpus_id = Column(Integer, ForeignKey("an_corpora.id"))
 
     assigned_user = relationship("InternalUser", foreign_keys=[assigned_user_id])
     assigned_reviewer = relationship("InternalUser", foreign_keys=[assigned_reviewer_id])
     corpus = relationship("InternalCorpus")
+
+
+class InternalAssignmentHistory(Base):
+    __tablename__ = "an_assignments_history"
+    id = Column(Integer, primary_key=True)
+    state = Column(String)
+    assigned_to = Column(Integer, ForeignKey("an_users.id"), nullable=True)
+    response = Column(JSON, nullable=True)
+    updated_by = Column(Integer, ForeignKey("an_users.id"), nullable=True)
+    date_entered = Column(DateTime, default=datetime.datetime.now())
 
 
 class InternalQuestion(Base):

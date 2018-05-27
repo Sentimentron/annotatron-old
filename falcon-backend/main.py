@@ -731,20 +731,6 @@ class AssignmentResource:
             resp.obj = error
             resp.status = falcon.HTTP_NOT_ACCEPTABLE
 
-    def on_patch(self, req, resp, arg1):
-        key = None
-        if req.user.role != UserKind.ADMINISTRATOR.value \
-                and req.user.role != UserKind.STAFF.value:
-            key = req.user.random_seed
-
-        database_id = req.recover_int64_field(arg1, key)
-        assignment_controller = AssignmentController(req.session)
-        database_assignment = assignment_controller.retrieve_assignment(database_id)
-        decoded_assigment = Assignment.from_json(req.body)
-
-        assignment_controller.update_assignment(database_id, )
-
-
     def on_get(self, req, resp, arg1, arg2=None):
         assignment_controller = AssignmentController(req.session)
         if arg1 == "byUser":
