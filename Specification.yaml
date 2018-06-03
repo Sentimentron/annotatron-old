@@ -266,7 +266,6 @@ paths:
             Which Corpus we're inserting into.
       tags:
         - assignment
-        - needsImplementation
         - needsTesting
       description: >-
         Adds an `Assignment` to Annotatron, which links a `Question` about an `Asset` in a given `Corpus` to a `User`
@@ -283,7 +282,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessfulInsert'
 
-  /assignments/{assignmentId}:
+  /assignments/{assignmentId}/{action}:
     patch:
       tags:
         - assignment
@@ -302,11 +301,20 @@ paths:
             type: integer
             format: int64
           required: true
+        - name: action
+          in: path
+          schema:
+            type: string
+            enum:
+              - submit
+              - approve
+              - reject
+          required: true
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Assignment'
+              $ref: '#/components/schemas/AssignmentResponse'
       responses:
         204:
           description: "Updated successfully"
@@ -316,6 +324,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
+  /assignments/{assignmentId}:
     get:
       operationId: getAssignment
       tags:
@@ -370,7 +379,6 @@ paths:
     get:
       tags:
         - assignment
-        - needsImplementation
         - needsTesting
       operationId: listAssignmentsByUser
       description: >-
@@ -394,7 +402,6 @@ paths:
     get:
       tags:
         - assignment
-        - needsImplementation
         - needsTesting
       operationId: listAssignmentsByUser
       description: >-
@@ -857,6 +864,13 @@ components:
           type: integer
           format: int64
 
+    AssignmentResponse:
+      properties:
+        response:
+          $ref: "$components/schema/Annotation"
+        notes:
+          type: string
+
     Assignment:
       required:
         - question
@@ -865,9 +879,11 @@ components:
         - assignedAnnotatorId
       properties:
         assets:
-          type: integer
-          format: int64
-          description: "The Assets that will be displayed for this question."
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: "The Assets that will be displayed for this Assignment."
         assignedUserId:
           type: integer
           format: int64

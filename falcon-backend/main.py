@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import InternalUser, InternalToken, InternalCorpus, InternalAsset, InternalQuestion,\
-    InternalAssignment, InternalAssignmentAssetXRef
+    InternalAssignment, InternalAssignmentAssetXRef, AssignmentAction, InternalAssignmentHistory
 
 Session = sessionmaker()
 
@@ -133,18 +133,58 @@ class AssignmentController:
 
         self.storage.commit()
 
-    def update_assignment(self, non_obfuscated_id:int, a:Assignment, current_user: InternalUser) -> ValidationError:
+    def update_assignment(self, non_obfuscated_id:int, user_provided_assignment:AssignmentUpdate, current_user: InternalUser, action: AssignmentAction) -> ValidationError:
         db_assignment = self.retrieve_assignment(non_obfuscated_id)
-        if db_assignment.assigned_annotator_id == current_user.id:
-            if not db_assignment.assigned_reviewer_id:
-                return self._update_assignment_finalize(db_assignment, a)
-            else:
-                return self._update_assignment_send_to_reviewer(db_assignment, a)
-        elif db_assignment.assigned_reviewer_id == current_user.id:
-            if a.assigned_user_id == db_assignment.assigned_annotator_id:
-                return self._update_assignment_return_to_annotator(db_assignment, a)
-            else:
-                return self._update_assignment_finalize(db_assignment, a)
+
+        if action == AssignmentAction.APPROVE:
+            # Retrieve the user that's responsible for approving this assignment
+            reviewer = db_assignment.assigned_reviewer
+            if reviewer != current_user:
+                return ValidationError([FieldError("_user", "Not responsible for approving this Annotation")])
+            ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Approved",
+                                           notes=user_provided_assignment.notes,
+                                           response=user_provided_assignment.response)
+            db_assignment.state = "approved"
+            db_assignment.completed = datetime.utcnow()
+            db_assignment.updated = datetime.utcnow()
+            if user_provided_assignment.response:
+                db_assignment.response = user_provided_assignment.response
+            db_assignment.assigned_user_id = None
+            self.storage.add(ah)
+            self.storage.commit()
+        elif action == AssignmentAction.REJECT:
+            reviewer = db_assignment.assigned_reviewer
+            if reviewer != current_user:
+                return ValidationError([FieldError("_user", "Not responsible for approving this Annotation")])
+            ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Rejected",
+                                           notes=user_provided_assignment.notes,
+                                           response=user_provided_assignment.response)
+            db_assignment.state = "created"
+            db_assignment.completed = None
+            db_assignment.updated = datetime.utcnow()
+            if user_provided_assignment.response:
+                db_assignment.response = user_provided_assignment.response
+            db_assignment.assigned_user_id = db_assignment.annotator_id
+            self.storage.add(ah)
+            self.storage.commit()
+        elif action == AssignmentAction.SUBMIT_FOR_REVIEW:
+            annotator = db_assignment.assigned_user
+            if current_user != annotator:
+                if annotator != current_user:
+                    return ValidationError([FieldError("_user", "Not responsible for this Assignment")])
+            ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Submitted",
+                                           notes=user_provided_assignment.notes,
+                                           response=user_provided_assignment.response)
+            db_assignment.state = "pending"
+            db_assignment.completed = None
+            db_assignment.updated = datetime.utcnow()
+            if user_provided_assignment.response:
+                db_assignment.response = user_provided_assignment.response
+            db_assignment.assigned_user_id = db_assignment.reviewer_id
+            self.storage.add(ah)
+            self.storage.commit()
+        else:
+            raise ValueError((action, "Shouldn't reach here"))
 
     def delete_assignment(self, non_obfuscated_id:int) -> ValidationError:
         db_assignment = self.retrieve_assignment(non_obfuscated_id)
@@ -731,7 +771,7 @@ class AssignmentResource:
             resp.obj = error
             resp.status = falcon.HTTP_NOT_ACCEPTABLE
 
-    def on_patch(self, req, resp, arg1):
+    def on_patch(self, req, resp, arg1, arg2):
         key = None
         if req.user.role != UserKind.ADMINISTRATOR.value \
                 and req.user.role != UserKind.STAFF.value:
@@ -742,7 +782,11 @@ class AssignmentResource:
         database_assignment = assignment_controller.retrieve_assignment(database_id)
         decoded_assigment = Assignment.from_json(req.body)
 
-        assignment_controller.update_assignment(database_id, )
+        if arg2 not in ["submit", "approve", "reject"]:
+            resp.obj = ValidationError(FieldError("action", "must be [submit, approve, reject]"))
+            raise falcon.HTTPNotAcceptable()
+
+        assignment_controller.update_assignment(database_id, decoded_assigment, req.user, AssignmentAction(arg2))
 
 
     def on_get(self, req, resp, arg1, arg2=None):

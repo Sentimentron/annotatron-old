@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS an_questions (
   corpus_id  BIGINT      NOT NULL REFERENCES an_corpora (id)
 );
 
-CREATE TABLE IF NOT EXISTS an_assignments (
+
+CREATE TABLE IF NOT EXISTS an_assignments_old (
   id bigserial PRIMARY KEY,
   summary_code text NOT NULL,
   question jsonb NOT NULL,
@@ -100,13 +101,39 @@ CREATE TABLE IF NOT EXISTS an_assignments (
   assigned_reviewer_id bigint REFERENCES an_users(id),
   actual_reviewer_id bigint REFERENCES an_users(id),
   corpus_id bigint NOT NULL references an_corpora(id),
-  created timestamptz NOT NULL DEFAULT 'now',
   completed timestamptz,
   reviewed timestamptz,
   annotator_notes text,
   reviewer_notes text,
   original_annotation_id bigint REFERENCES an_annotations(id),
   corrected_annotation_id bigint REFERENCES an_annotations(id)
+);
+
+CREATE TABLE IF NOT EXISTS an_assignments (
+  id BIGSERIAL NOT NULL,
+  summary_code text NOT NULL,
+  assigned_user_id bigint REFERENCES an_users(id),
+  annotator_id bigint NOT NULL REFERENCES an_users(id),
+  reviewer_id bigint NOT NULL REFERENCES an_users(id),
+  corpus_id bigint NOT NULL references an_corpora(id),
+  created timestamptz NOT NULL DEFAULT 'now',
+  updated timestamptz NOT NULL DEFAULT 'now',
+  completed timestamptz,
+  question jsonb NOT NULL,
+  response jsonb,
+  state text NOT NULL default 'created',
+  CHECK(!(state == 'approved' && (response IS NULL))),
+  CHECK(!(state != 'approved' && (assigned_user_id IS NULL)))
+);
+
+CREATE TABLE IF NOT EXISTS an_assignment_history(
+  id BIGSERIAL PRIMARY KEY,
+  assignment_id BIGINT NOT NULL REFERENCES an_assignment(id),
+  updated_on timestamptz NOT NULL,
+  state text NOT NULL,
+  notes text,
+  response jsonb,
+  user_id bigint NOT NULL REFERENCES an_users(id)
 );
 
 CREATE TABLE IF NOT EXISTS an_assignments_assets_xref (
