@@ -10,7 +10,7 @@ import falcon
 from Crypto.Cipher import ARC4
 from pyannotatron.models import ConfigurationResponse, NewUserRequest, ValidationError, FieldError, LoginRequest, \
     LoginResponse, AnnotatronUser, UserKind, Corpus, BinaryAsset, BinaryAssetDescription, BinaryAssetKind, \
-    AbstractQuestion, Question, SuccessfulInsert, Assignment, Annotation
+    AbstractQuestion, Question, SuccessfulInsert, Assignment, Annotation, AssignmentResponse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -41,16 +41,14 @@ class AssignmentController:
         converted_assets = [x.asset_id for x in a.asset_refs]
         ret = Assignment(
             assets=converted_assets,
-            assigned_annotator_id=a.assigned_annotator_id,
+            assigned_annotator_id=a.annotator_id,
             assigned_user_id=a.assigned_user_id,
             question=Question.from_json(a.question),
             response=None,
             created=a.created,
-            assigned_reviewer_id=a.assigned_reviewer_id,
+            assigned_reviewer_id=a.reviewer_id,
             completed=a.completed,
             reviewed=a.reviewed,
-            annotator_notes=a.annotator_notes,
-            reviewer_notes=a.reviewer_notes,
         )
         if a.response:
             ret.response = Annotation.from_json(a.response)
@@ -76,10 +74,10 @@ class AssignmentController:
         an = InternalAssignment(
             summary_code=a.question.summary_code,
             assigned_user_id=a.assigned_annotator_id,
-            assigned_annotator_id=a.assigned_annotator_id,
+            annotator_id=a.assigned_annotator_id,
             question=a.question.to_json(),
             response=None,
-            assigned_reviewer_id=a.assigned_reviewer_id,
+            reviewer_id=a.assigned_reviewer_id,
             created=datetime.utcnow(),
             corpus=c
         )
@@ -103,37 +101,8 @@ class AssignmentController:
         user = user_controller.get_user_from_id(non_obfuscated_id)
         return self.storage.query(InternalAssignment).filter_by(assigned_user=user)
 
-    def _update_assignment_send_to_reviewer(self, db_assignment:InternalAssignment, a:Assignment) -> ValidationError:
-
-        # TODO: check for problems
-        db_assignment.response = a.response
-        db_assignment.annotator_notes = a.annotator_notes
-        db_assignment.completed = datetime.utcnow()
-
-        db_assignment.assigned_user_id = db_assignment.assigned_reviewer_id
-
-        self.storage.commit()
-
-        pass
-
-    def _update_assignment_return_to_annotator(self, db_assignment: InternalAssignment, a:Assignment) -> ValidationError:
-
-        db_assignment.reviewer_notes = a.reviewer_notes
-        db_assignment.assigned_user_id = db_assignment.assigned_annotator_id
-        db_assignment.completed = None
-
-        self.storage.commit()
-
-        pass
-
-    def _update_assignment_finalize(self, db_assignment: InternalAssignment, a:Assignment) -> ValidationError:
-        db_assignment.reviewer_notes = a.reviewer_notes
-        db_assignment.assigned_user_id = None
-        db_assignment.reviewed = datetime.utcnow()
-
-        self.storage.commit()
-
-    def update_assignment(self, non_obfuscated_id:int, user_provided_assignment:AssignmentUpdate, current_user: InternalUser, action: AssignmentAction) -> ValidationError:
+    def update_assignment(self, non_obfuscated_id:int, user_provided_assignment:AssignmentResponse,
+                          current_user: InternalUser, action: AssignmentAction) -> ValidationError:
         db_assignment = self.retrieve_assignment(non_obfuscated_id)
 
         if action == AssignmentAction.APPROVE:
@@ -779,15 +748,13 @@ class AssignmentResource:
 
         database_id = req.recover_int64_field(arg1, key)
         assignment_controller = AssignmentController(req.session)
-        database_assignment = assignment_controller.retrieve_assignment(database_id)
-        decoded_assigment = Assignment.from_json(req.body)
+        decoded_assigment = AssignmentResponse.from_json(req.body)
 
         if arg2 not in ["submit", "approve", "reject"]:
             resp.obj = ValidationError(FieldError("action", "must be [submit, approve, reject]"))
             raise falcon.HTTPNotAcceptable()
 
         assignment_controller.update_assignment(database_id, decoded_assigment, req.user, AssignmentAction(arg2))
-
 
     def on_get(self, req, resp, arg1, arg2=None):
         assignment_controller = AssignmentController(req.session)

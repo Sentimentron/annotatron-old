@@ -910,15 +910,6 @@ components:
           format: datetime
           description: >-
             Contains the date that the `Assignment` was completed.
-        reviewed:
-          type: string
-          format: datetime
-          description: >-
-            Contains the date that the `Assignment` was reviewed.
-        annotatorNotes:
-          type: string
-        reviewerNotes:
-          type: string
 
     BinaryAssetDescription:
       title: BinaryAsset
