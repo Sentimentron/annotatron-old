@@ -851,7 +851,7 @@ class GetSessionTokenComponent:
                 raise falcon.HTTPNotAcceptable('This API only supports Bearer Authorization')
 
             t = TokenController(req.session)
-            req.user = t.get_user_from_token(auth)
+            req.user = t.get_user_from_token(auth)Q
             req.token = auth
 
         # TODO: restrict URL choice in here
