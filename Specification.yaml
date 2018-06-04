@@ -317,7 +317,7 @@ paths:
             schema:
               $ref: '#/components/schemas/AssignmentResponse'
       responses:
-        204:
+        202:
           description: "Updated successfully"
         422:
           description: "Validation error"
@@ -875,7 +875,7 @@ components:
           $ref: "$components/schema/Annotation"
         notes:
           type: string
-          
+
     AssignmentHistory:
       description: >-
 
