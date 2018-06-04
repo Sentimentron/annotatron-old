@@ -109,8 +109,9 @@ class InternalAssignmentHistory(Base):
 
     __tablename__ = "an_assignment_history"
     id = Column(Integer, primary_key=True)
-    assignment_id = Column(Integer, ForeignKey("an_assigments.id"))
+    assignment_id = Column(Integer, ForeignKey("an_assignments.id"))
     updated_on = Column(DateTime, default=datetime.datetime.utcnow())
+    updating_user_id = Column(Integer, ForeignKey("an_users.id"))
     state = Column(String)
     notes = Column(String)
     response = Column(JSON)

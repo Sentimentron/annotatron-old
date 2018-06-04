@@ -46,24 +46,30 @@ class AssignmentController:
             question=Question.from_json(a.question),
             response=None,
             created=a.created,
-            assigned_reviewer_id=a.reviewer_id,
-            completed=a.completed,
-            reviewed=a.reviewed,
+            assigned_reviewer_id=a.reviewer_id
         )
         if a.response:
             ret.response = Annotation.from_json(a.response)
-        return a
+        return ret
 
-    def create_assigment(self, a:Assignment, c:InternalCorpus) -> (SuccessfulInsert, ValidationError):
+    def create_assigment(self, new_assignment:Assignment, c:InternalCorpus) -> (SuccessfulInsert, ValidationError):
         """
         Checks an Assignment for issues, then logs it into the database.
-        :param a:
+        :param new_assignment:
         :return: (SuccessfulInsert, None) on Success.
         """
 
+        new_assignment.assigned_annotator_id = recover_int64_field(new_assignment.assigned_annotator_id)
+        if new_assignment.assigned_reviewer_id:
+            new_assignment.assigned_reviewer_id = recover_int64_field(new_assignment.assigned_reviewer_id)
+        new_assignment.assigned_user_id = recover_int64_field(new_assignment.assigned_user_id)
+
+        for i, a in enumerate(new_assignment.assets):
+            new_assignment.assets[i] = recover_int64_field(a)
+
         resolved_xrefs = []
         asset_controller = AssetController(self.storage)
-        for id in a.assets:
+        for id in new_assignment.assets:
             asset = asset_controller.get_asset_with_id(id)
             if asset is None:
                 return None, ValidationError([FieldError("assets", "Could not resolve one or more Assets", False)])
@@ -72,14 +78,15 @@ class AssignmentController:
             self.storage.add(xref)
 
         an = InternalAssignment(
-            summary_code=a.question.summary_code,
-            assigned_user_id=a.assigned_annotator_id,
-            annotator_id=a.assigned_annotator_id,
-            question=a.question.to_json(),
+            summary_code=new_assignment.question.summary_code,
+            assigned_user_id=new_assignment.assigned_annotator_id,
+            annotator_id=new_assignment.assigned_annotator_id,
+            question=new_assignment.question.to_json(),
             response=None,
-            reviewer_id=a.assigned_reviewer_id,
+            reviewer_id=new_assignment.assigned_reviewer_id,
             created=datetime.utcnow(),
-            corpus=c
+            corpus=c,
+            state="created"
         )
 
         self.storage.begin_nested()
@@ -89,6 +96,7 @@ class AssignmentController:
         for x in resolved_xrefs:
             x.assignment = an
         self.storage.commit()
+        return SuccessfulInsert(id=obfuscate_int64_field(an.id)), None
 
     def retrieve_assignment(self, non_obfuscated_id: int) -> InternalAssignment:
         return self.storage.query(InternalAssignment).get(non_obfuscated_id)
@@ -102,37 +110,43 @@ class AssignmentController:
         return self.storage.query(InternalAssignment).filter_by(assigned_user=user)
 
     def update_assignment(self, non_obfuscated_id:int, user_provided_assignment:AssignmentResponse,
-                          current_user: InternalUser, action: AssignmentAction) -> ValidationError:
+                          current_user: InternalUser, action: str) -> ValidationError:
         db_assignment = self.retrieve_assignment(non_obfuscated_id)
+        user_provided_response_json = None
+        if user_provided_assignment.response:
+            user_provided_response_json = user_provided_assignment.response.to_json()
 
         if action == AssignmentAction.APPROVE:
-            # Retrieve the user that's responsible for approving this assignment
+            # If the reviewer approves the annotation, place into the "approved" state
             reviewer = db_assignment.assigned_reviewer
             if reviewer != current_user:
                 return ValidationError([FieldError("_user", "Not responsible for approving this Annotation")])
             ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Approved",
                                            notes=user_provided_assignment.notes,
-                                           response=user_provided_assignment.response)
+                                           response=user_provided_response_json,
+                                           updating_user_id=current_user.id)
             db_assignment.state = "approved"
             db_assignment.completed = datetime.utcnow()
             db_assignment.updated = datetime.utcnow()
             if user_provided_assignment.response:
-                db_assignment.response = user_provided_assignment.response
+                db_assignment.response = user_provided_assignment.response.to_json()
             db_assignment.assigned_user_id = None
             self.storage.add(ah)
             self.storage.commit()
         elif action == AssignmentAction.REJECT:
+            # If rejected, assign back to the annotator.
             reviewer = db_assignment.assigned_reviewer
             if reviewer != current_user:
                 return ValidationError([FieldError("_user", "Not responsible for approving this Annotation")])
             ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Rejected",
                                            notes=user_provided_assignment.notes,
-                                           response=user_provided_assignment.response)
+                                           response=user_provided_assignment.response,
+                                           updating_user_id=current_user.id)
             db_assignment.state = "created"
             db_assignment.completed = None
             db_assignment.updated = datetime.utcnow()
             if user_provided_assignment.response:
-                db_assignment.response = user_provided_assignment.response
+                db_assignment.response = user_provided_assignment.response.to_json()
             db_assignment.assigned_user_id = db_assignment.annotator_id
             self.storage.add(ah)
             self.storage.commit()
@@ -143,13 +157,23 @@ class AssignmentController:
                     return ValidationError([FieldError("_user", "Not responsible for this Assignment")])
             ah = InternalAssignmentHistory(assignment_id=db_assignment.id, state="Submitted",
                                            notes=user_provided_assignment.notes,
-                                           response=user_provided_assignment.response)
-            db_assignment.state = "pending"
-            db_assignment.completed = None
-            db_assignment.updated = datetime.utcnow()
-            if user_provided_assignment.response:
-                db_assignment.response = user_provided_assignment.response
-            db_assignment.assigned_user_id = db_assignment.reviewer_id
+                                           response=user_provided_response_json,
+                                           updating_user_id=current_user.id)
+            if not db_assignment.reviewer_id:
+                # If there's no reviewer, then automatically place the annotation into the approved state.
+                db_assignment.state = "approved"
+                db_assignment.completed = datetime.utcnow()
+                if user_provided_assignment.response:
+                    db_assignment.response = user_provided_assignment.response.to_json()
+                db_assignment.assigned_user_id = None
+            else:
+                # Otherwise, assign it to the reviewer
+                db_assignment.state = "pending"
+                db_assignment.completed = None
+                db_assignment.updated = datetime.utcnow()
+                if user_provided_assignment.response:
+                    db_assignment.response = user_provided_response_json
+                db_assignment.assigned_user_id = db_assignment.reviewer_id
             self.storage.add(ah)
             self.storage.commit()
         else:
@@ -754,7 +778,8 @@ class AssignmentResource:
             resp.obj = ValidationError(FieldError("action", "must be [submit, approve, reject]"))
             raise falcon.HTTPNotAcceptable()
 
-        assignment_controller.update_assignment(database_id, decoded_assigment, req.user, AssignmentAction(arg2))
+        assignment_controller.update_assignment(database_id, decoded_assigment, req.user, arg2)
+        resp.status = falcon.HTTP_ACCEPTED
 
     def on_get(self, req, resp, arg1, arg2=None):
         assignment_controller = AssignmentController(req.session)
@@ -776,7 +801,7 @@ class AssignmentResource:
                 "forAnnotation": []
             }
             for r in response:
-                if r.assigned_reviewer_id == req.user.id:
+                if r.reviewer_id == req.user.id:
                     ret["forReview"].append(req.obfuscate_int64_field(r.id, key))
                 else:
                     ret["forAnnotation"].append(req.obfuscate_int64_field(r.id, key))
@@ -798,13 +823,13 @@ class AssignmentResource:
                 "completed": []
             }
             for r in response:
-                if r.completed and r.reviewed:
+                if r.state == "approved":
                     ret["completed"].append(req.obfuscate_int64_field(r.id))
-                elif not r.reviewed:
+                elif r.state == "pending":
                     ret["forReview"].append(req.obfuscate_int64_field(r.id))
                 else:
-                    ret["completed"].append(req.obfuscate_int64_field(r.id))
-            ret.obj = ret
+                    ret["forAnnotation"].append(req.obfuscate_int64_field(r.id))
+            resp.obj = ret
         else:
             if req.user.role != UserKind.ADMINISTRATOR.value \
                     and req.user.role != UserKind.STAFF.value:

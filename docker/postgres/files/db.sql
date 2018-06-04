@@ -23,117 +23,117 @@ END $$;
 
 -- Primary user table
 CREATE TABLE IF NOT EXISTS an_users (
-  id bigserial PRIMARY KEY,
-  username text UNIQUE NOT NULL,
-  created timestamptz NOT NULL DEFAULT 'now',
-  email text NOT NULL,
+  id                    BIGSERIAL PRIMARY KEY,
+  username              TEXT UNIQUE     NOT NULL,
+  created               TIMESTAMPTZ     NOT NULL DEFAULT 'now',
+  email                 TEXT            NOT NULL,
   -- Salt is also stored in this field
-  password bytea NOT NULL,
-  password_last_changed timestamptz NULL,
-  role an_user_type_v1 NOT NULL,
-  random_seed text NOT NULL,
-  deactivated_on timestamptz,
-  password_reset_needed boolean NOT NULL default FALSE
+  password              BYTEA           NOT NULL,
+  password_last_changed TIMESTAMPTZ     NULL,
+  role                  AN_USER_TYPE_V1 NOT NULL,
+  random_seed           TEXT            NOT NULL,
+  deactivated_on        TIMESTAMPTZ,
+  password_reset_needed BOOLEAN         NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS an_user_tokens (
-  id bigserial PRIMARY KEY,
-  user_id bigint REFERENCES an_users(id),
-  expires timestamptz NOT NULL,
-  token text NOT NULL
+  id      BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES an_users (id),
+  expires TIMESTAMPTZ NOT NULL,
+  token   TEXT        NOT NULL
 );
 
 -- Primary corpus information
 CREATE TABLE IF NOT EXISTS an_corpora (
-  id bigserial PRIMARY KEY,
-  name text UNIQUE NOT NULL,
-  description text,
-  created timestamptz NOT NULL DEFAULT 'now',
-  copyright_usage_restrictions text
+  id                           BIGSERIAL PRIMARY KEY,
+  name                         TEXT UNIQUE NOT NULL,
+  description                  TEXT,
+  created                      TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  copyright_usage_restrictions TEXT
 );
 
 CREATE INDEX IF NOT EXISTS an_corpora_name ON an_corpora(name);
 
 -- Primary asset table.
 CREATE TABLE IF NOT EXISTS an_assets (
-  id bigserial PRIMARY KEY,
-  name text NOT NULL,
-  content bytea NOT NULL,
-  user_metadata jsonb,
-  date_uploaded timestamptz NOT NULL DEFAULT 'now',
-  copyright_usage_restrictions text,
-  checksum text NOT NULL,
-  mime_type text NOT NULL,
-  type_description text NOT NULL,
-  corpus_id bigint NOT NULL REFERENCES an_corpora(id),
-  uploader_id bigint NOT NULL REFERENCES an_users(id),
-  CHECK(sha512(content) = checksum),
-  UNIQUE(name, corpus_id)
+  id                           BIGSERIAL PRIMARY KEY,
+  name                         TEXT        NOT NULL,
+  content                      BYTEA       NOT NULL,
+  user_metadata                JSONB,
+  date_uploaded                TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  copyright_usage_restrictions TEXT,
+  checksum                     TEXT        NOT NULL,
+  mime_type                    TEXT        NOT NULL,
+  type_description             TEXT        NOT NULL,
+  corpus_id                    BIGINT      NOT NULL REFERENCES an_corpora (id),
+  uploader_id                  BIGINT      NOT NULL REFERENCES an_users (id),
+  CHECK (sha512(content) = checksum),
+  UNIQUE (name, corpus_id)
 );
 
 CREATE TABLE IF NOT EXISTS an_annotations (
-  id bigserial PRIMARY KEY,
-  source an_annotation_source_v1 NOT NULL,
-  summary_code text NOT NULL,
-  created timestamptz NOT NULL DEFAULT 'now',
-  kind text NOT NULL,
-  content jsonb NOT NULL
+  id           BIGSERIAL PRIMARY KEY,
+  source       AN_ANNOTATION_SOURCE_V1 NOT NULL,
+  summary_code TEXT                    NOT NULL,
+  created      TIMESTAMPTZ             NOT NULL DEFAULT 'now',
+  kind         TEXT                    NOT NULL,
+  content      JSONB                   NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS an_questions (
-  id         BIGSERIAL PRIMARY KEY,
-  kind       TEXT        NOT NULL,
-  content    JSONB       NOT NULL,
-  summary_code TEXT NOT NULL,
-  created    TIMESTAMPTZ NOT NULL DEFAULT 'now',
-  creator_id BIGINT      NOT NULL REFERENCES an_users (id),
-  corpus_id  BIGINT      NOT NULL REFERENCES an_corpora (id)
+  id           BIGSERIAL PRIMARY KEY,
+  kind         TEXT        NOT NULL,
+  content      JSONB       NOT NULL,
+  summary_code TEXT        NOT NULL,
+  created      TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  creator_id   BIGINT      NOT NULL REFERENCES an_users (id),
+  corpus_id    BIGINT      NOT NULL REFERENCES an_corpora (id)
 );
 
 
 CREATE TABLE IF NOT EXISTS an_assignments_old (
-  id bigserial PRIMARY KEY,
-  summary_code text NOT NULL,
-  question jsonb NOT NULL,
-  response jsonb,
-  assigned_annotator_id bigint NOT NULL REFERENCES an_users(id),
-  assigned_user_id bigint NOT NULL REFERENCES an_users(id),
-  assigned_reviewer_id bigint REFERENCES an_users(id),
-  actual_reviewer_id bigint REFERENCES an_users(id),
-  corpus_id bigint NOT NULL references an_corpora(id),
-  completed timestamptz,
-  reviewed timestamptz,
-  annotator_notes text,
-  reviewer_notes text,
-  original_annotation_id bigint REFERENCES an_annotations(id),
-  corrected_annotation_id bigint REFERENCES an_annotations(id)
+  id                      BIGSERIAL PRIMARY KEY,
+  summary_code            TEXT   NOT NULL,
+  question                JSONB  NOT NULL,
+  response                JSONB,
+  assigned_annotator_id   BIGINT NOT NULL REFERENCES an_users (id),
+  assigned_user_id        BIGINT NOT NULL REFERENCES an_users (id),
+  assigned_reviewer_id    BIGINT REFERENCES an_users (id),
+  actual_reviewer_id      BIGINT REFERENCES an_users (id),
+  corpus_id               BIGINT NOT NULL REFERENCES an_corpora (id),
+  completed               TIMESTAMPTZ,
+  reviewed                TIMESTAMPTZ,
+  annotator_notes         TEXT,
+  reviewer_notes          TEXT,
+  original_annotation_id  BIGINT REFERENCES an_annotations (id),
+  corrected_annotation_id BIGINT REFERENCES an_annotations (id)
 );
 
 CREATE TABLE IF NOT EXISTS an_assignments (
-  id BIGSERIAL NOT NULL,
-  summary_code text NOT NULL,
-  assigned_user_id bigint REFERENCES an_users(id),
-  annotator_id bigint NOT NULL REFERENCES an_users(id),
-  reviewer_id bigint NOT NULL REFERENCES an_users(id),
-  corpus_id bigint NOT NULL references an_corpora(id),
-  created timestamptz NOT NULL DEFAULT 'now',
-  updated timestamptz NOT NULL DEFAULT 'now',
-  completed timestamptz,
-  question jsonb NOT NULL,
-  response jsonb,
-  state text NOT NULL default 'created',
-  CHECK(!(state == 'approved' && (response IS NULL))),
-  CHECK(!(state != 'approved' && (assigned_user_id IS NULL)))
+  id               BIGSERIAL   NOT NULL PRIMARY KEY,
+  summary_code     TEXT        NOT NULL,
+  assigned_user_id BIGINT REFERENCES an_users (id),
+  annotator_id     BIGINT      NOT NULL REFERENCES an_users (id),
+  reviewer_id      BIGINT REFERENCES an_users (id),
+  corpus_id        BIGINT      NOT NULL REFERENCES an_corpora (id),
+  created          TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  updated          TIMESTAMPTZ NOT NULL DEFAULT 'now',
+  completed        TIMESTAMPTZ,
+  question         JSONB       NOT NULL,
+  response         JSONB,
+  state            TEXT        NOT NULL DEFAULT 'created',
+  CHECK (NOT ((state = 'approved') AND (response IS NULL))),
+  CHECK (NOT ((state != 'approved') AND (assigned_user_id IS NULL)))
 );
 
-CREATE TABLE IF NOT EXISTS an_assignment_history(
-  id BIGSERIAL PRIMARY KEY,
-  assignment_id BIGINT NOT NULL REFERENCES an_assignment(id),
-  updated_on timestamptz NOT NULL,
-  state text NOT NULL,
-  notes text,
-  response jsonb,
-  user_id bigint NOT NULL REFERENCES an_users(id)
+CREATE TABLE IF NOT EXISTS an_assignment_history (
+  id               BIGSERIAL PRIMARY KEY,
+  assignment_id    BIGINT      NOT NULL REFERENCES an_assignments (id),
+  updating_user_id BIGINT      NOT NULL REFERENCES an_users (id),
+  updated_on       TIMESTAMPTZ NOT NULL,
+  state            TEXT        NOT NULL,
+  notes            TEXT,
+  response         JSONB
 );
 
 CREATE TABLE IF NOT EXISTS an_assignments_assets_xref (

@@ -21,6 +21,11 @@ class TestAssetLifecycleBase(TestCaseWithDefaultCorpus):
         response = self.simulate_post("/corpus/test_corpus/assets/testFile", json=b.to_json())
         self.assertEqual(response.status, falcon.HTTP_201)
 
+    def get_default_file_id(self):
+        response = self.simulate_get("/corpus/test_corpus/assets/testFile")
+
+        return response.json["id"]
+
 
 class TestAssetLifecycleUpload(TestAssetLifecycleBase):
     def test_asset_upload(self):

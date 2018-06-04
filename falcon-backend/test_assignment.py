@@ -46,7 +46,7 @@ class TestAssignmentLifecycle(TestAssetLifecycleWithDefaultFileBase):
         }
 
         assignment_json = {
-            "assets": [1, 22],
+            "assets": [self.get_default_file_id()],
             "assignedUserId": user_id,
             "assignedAnnotatorId": user_id,
             "question": question_input_json,
@@ -54,26 +54,34 @@ class TestAssignmentLifecycle(TestAssetLifecycleWithDefaultFileBase):
 
         # Create the assignment, assigned to the current admin user as annotator and reviewer
         response = self.simulate_post("/assignments/test_corpus/", json=assignment_json)
+        self.assertEquals(response.status, falcon.HTTP_CREATED)
         inserted_id = response.json["insertedId"]
 
         # Should appear in our to-do list
-        response = self.simulate_post("/assignments/byUser/{}".format(user_id))
+        response = self.simulate_get("/assignments/byUser/{}".format(user_id))
         self.assertTrue(inserted_id in response.json["forAnnotation"])
 
         # Should appear in the right section of the Corpus annotations
-        response = self.simulate_get("/assignments/test_corpus/")
+        response = self.simulate_get("/assignments/byCorpus/test_corpus/")
         self.assertTrue(inserted_id in response.json["forAnnotation"])
 
         # Provide a response, should be automatically finalized
-        response = self.simulate_get("/assignments/{}".format(inserted_id))
+        response = {
+            "notes": "Huh?",
+            "response": response_input_json
+        }
+        response = self.simulate_patch("/assignments/{}/submit".format(inserted_id), json=response)
+        self.assertEqual(response.status, falcon.HTTP_ACCEPTED)
+
+        """response = self.simulate_get("/assignments/{}".format(inserted_id))
         editing = response.json
         editing['response'] = response_input_json
         editing['annotatorNotes'] = 'Huh?'
         response = self.simulate_patch("/assignments/{}".format(inserted_id))
-        self.assertEquals(response.status_code, falcon.HTTP_ACCEPTED)
+        self.assertEquals(response.status_code, falcon.HTTP_ACCEPTED)"""
 
-        # Should appear in the completed setion
-        response = self.simulate_get("/assignments/test_corpus/")
+        # Should appear in the completed section
+        response = self.simulate_get("/assignments/byCorpus/test_corpus/")
         self.assertTrue(inserted_id in response.json["completed"])
 
     """
